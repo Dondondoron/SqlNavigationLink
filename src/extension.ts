@@ -295,7 +295,7 @@ function getPythonParsePromise(sqlPaths: string[], context: vscode.ExtensionCont
       pythonPath,
       [scriptPath, JSON.stringify(sqlPaths), tempFilePath],
       { maxBuffer: 1024 * 1024 * 10 }, // Generous 10MB stderr buffer for Python logs
-      (error, stdout, stderr) => {
+      (error:any, stdout:any, stderr:any) => {
         if (error) {
           vscode.window.showErrorMessage(
             `SQL Scanner Error: ${stderr || error.message}`

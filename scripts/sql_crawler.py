@@ -72,7 +72,7 @@ class SqlCrawler:
 
             for expr in model_header.expressions:
                 if expr.name == 'name':
-                    model_name = expr.args['value'].name
+                    model_name = str(expr.args['value'])
             
 
             if len(model_value) < 2:
