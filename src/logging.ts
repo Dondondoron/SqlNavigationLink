@@ -7,7 +7,7 @@ let sqlMeshTerminal: vscode.Terminal | undefined;
 
 
 
-export function getSqlMeshTerminal() {
+export function getSqlLinkTerminal() {
     if (!sqlMeshTerminal) {
         const pty: vscode.Pseudoterminal = {
             onDidWrite: writeEmitter.event,
@@ -20,7 +20,7 @@ export function getSqlMeshTerminal() {
         };
 
         sqlMeshTerminal = vscode.window.createTerminal({
-            name: "SQLMesh Uvicorn",
+            name: "SQL Navigation Linker",
             pty
         });
     }

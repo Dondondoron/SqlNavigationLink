@@ -165,12 +165,16 @@ if __name__ == '__main__':
     sql_models = crawler.parse_sql_models_and_extract_tables(parsed_queries)
 
     # Use mode='json' so Pydantic converts set[TableInfo] -> list[dict]
+
     output_data = {
         key: model.model_dump(mode='json') if hasattr(model, 'model_dump') else model
         for key, model in sql_models.items()
     }
 
-    # Clean JSON print
-    print(json.dumps(output_data))
-
-    
+    if len(sys.argv) > 2:
+        output_file_path = sys.argv[2]
+        with open(output_file_path, 'w', encoding='utf-8') as f:
+            json.dump(output_data, f)
+    else:
+        # Fallback to stdout for quick manual CLI testing
+        print(json.dumps(output_data))

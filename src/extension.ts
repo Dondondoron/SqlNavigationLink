@@ -8,8 +8,15 @@ import * as fs from 'fs';
 import * as os from 'os';
 
 
-import { getSqlMeshTerminal, writeEmitter } from './logging';
+import { getSqlLinkTerminal, writeEmitter } from './logging';
 import { PathObject, PathTreeDataProvider, PathTreeItem } from "./pathProvider";
+
+
+function logInformation(message: string) {
+
+  console.log(message);
+  vscode.window.showInformationMessage(message);
+}
 
 interface TableInfo {
   fullname: string;
@@ -51,25 +58,25 @@ export async function activate(context: vscode.ExtensionContext) {
   const config = vscode.workspace.getConfiguration('Dondondoron.sql-nav-link.pythonPath');
 
   const pythonPath = vscode.workspace
-                .getConfiguration('Dondondoron.sql-nav-link')
-                .get<string>('pythonPath');
+    .getConfiguration('Dondondoron.sql-nav-link')
+    .get<string>('pythonPath');
 
   const configListener = vscode.workspace.onDidChangeConfiguration(async event => {
-        // Check if the specific setting (or whole section) was affected
-        if (event.affectsConfiguration('Dondondoron.sql-nav-link.pythonPath')) {
+    // Check if the specific setting (or whole section) was affected
+    if (event.affectsConfiguration('Dondondoron.sql-nav-link.pythonPath')) {
 
-            // Read the updated value
-            const updatedPythonPath = vscode.workspace
-                .getConfiguration('Dondondoron.sql-nav-link')
-                .get<string>('pythonPath');
+      // Read the updated value
+      const updatedPythonPath = vscode.workspace
+        .getConfiguration('Dondondoron.sql-nav-link')
+        .get<string>('pythonPath');
 
-            console.log('Python path changed to:', updatedPythonPath);
-            vscode.window.showInformationMessage(`Updated Python Path: ${updatedPythonPath}`);
-            
-            if(updatedPythonPath)PythonConfig.pythonPath = updatedPythonPath
-            // Re-initialize or handle your Python execution logic here...
-        }
-    });
+      console.log('Python path changed to:', updatedPythonPath);
+      vscode.window.showInformationMessage(`Updated Python Path: ${updatedPythonPath}`);
+
+      if (updatedPythonPath) PythonConfig.pythonPath = updatedPythonPath
+      // Re-initialize or handle your Python execution logic here...
+    }
+  });
 
   const startEngine = async () => {
     const pythonActive = await setUpPython(context, config, pythonPath);
@@ -96,7 +103,7 @@ export async function activate(context: vscode.ExtensionContext) {
         ? pathProvider.getPaths().map(m => m.filePath)
         : (vscode.workspace.workspaceFolders ?? []).map(folder => folder.uri.fsPath);
 
-      const models = await getPythonParsePromise(sqlPaths)
+      const models = await getPythonParsePromise(sqlPaths, context)
 
       if (models) sqlModelProvider.initModels(models)
 
@@ -260,56 +267,77 @@ async function getPythonPath(context: vscode.ExtensionContext): Promise<string |
   return 'python';
 }
 
+export function getSqlCrawlerPath(context: vscode.ExtensionContext): string {
+  return path.join(context.extensionPath, 'scripts', 'sql_crawler.py');
+}
+function getPythonParsePromise(sqlPaths: string[], context: vscode.ExtensionContext): Promise<SqlModelsResponse | undefined> {
 
-function getPythonParsePromise(sqlPaths: string[]): Promise<SqlModelsResponse | undefined> {
+
 
   const pythonPath = PythonConfig.pythonPath
-  const scriptPath = path.join(
-    __dirname,
-    "..",
-    "src",
-    "sql_crawler",
-    "sql_crawler.py",
-  );
 
+  logInformation("Starting the parsing of files from python env: " + pythonPath)
 
-  return new Promise((resolve, reject) => {
-    // Run Python directly without LSP!
+  const scriptPath = getSqlCrawlerPath(context)
+
+  return new Promise<SqlModelsResponse | undefined>((resolve) => {
+    // 1. Create a unique temporary file path
+    const tempFileName = `sql_scanner_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.json`;
+    const tempFilePath = path.join(os.tmpdir(), tempFileName);
+
+    // Helper to clean up the temp file safely
+    const cleanup = () => {
+      fs.unlink(tempFilePath, () => { }); // Silent cleanup attempt
+    };
+
+    // 2. Pass the tempFilePath as the third CLI argument to Python
     execFile(
       pythonPath,
-      [scriptPath, JSON.stringify(sqlPaths)],
+      [scriptPath, JSON.stringify(sqlPaths), tempFilePath],
+      { maxBuffer: 1024 * 1024 * 10 }, // Generous 10MB stderr buffer for Python logs
       (error, stdout, stderr) => {
         if (error) {
           vscode.window.showErrorMessage(
-            `SQL Scanner Error: ${stderr || error.message}`,
+            `SQL Scanner Error: ${stderr || error.message}`
           );
+          cleanup();
           return resolve(undefined);
         }
 
-        try {
-          const rawData = stdout.trim();
+        // 3. Read the output directly from the file
+        fs.readFile(tempFilePath, 'utf-8', (readErr, rawData) => {
+          cleanup(); // Always clean up as soon as reading finishes or fails
 
-          const models: SqlModelsResponse = JSON.parse(rawData);
-
-
-
-          // Access your parsed data directly
-          for (const [filePath, modelInfo] of Object.entries(models)) {
-            console.log(`Model Path: ${filePath}`);
-            console.log(`Model Name: ${modelInfo.name}`);
-            console.log(`Tables:`, modelInfo.table_names);
+          if (readErr) {
+            vscode.window.showErrorMessage(
+              `SQL Scanner Error: Could not read temporary output file.`
+            );
+            return resolve(undefined);
           }
 
-          resolve(models);
-        } catch (e) {
-          vscode.window.showErrorMessage(
-            "Failed to parse Python JSON output",
-          );
-          resolve(undefined);
-        }
-      },
+          try {
+            const models: SqlModelsResponse = JSON.parse(rawData);
+
+            // Access your parsed data
+            for (const [filePath, modelInfo] of Object.entries(models)) {
+              console.log(`Model Path: ${filePath}`);
+              console.log(`Model Name: ${modelInfo.name}`);
+              console.log(`Tables:`, modelInfo.table_names);
+            }
+
+            logInformation(
+              "Successfully parsed " + Object.keys(models).length + " SQL files"
+            );
+
+            resolve(models);
+          } catch (e) {
+            vscode.window.showErrorMessage("Failed to parse Python JSON output");
+            resolve(undefined);
+          }
+        });
+      }
     );
-  })
+  });
 }
 
 async function findTableDefinition(document: vscode.TextDocument, position: vscode.Position, provider: SqlModelProvider) {
@@ -322,7 +350,7 @@ async function findTableDefinition(document: vscode.TextDocument, position: vsco
   const fqn = tableName
 
 
-  const targetRefModels = Array.from(provider.models.values()).filter(m=> m.name === tableName)
+  const targetRefModels = Array.from(provider.models.values()).filter(m => m.name === tableName)
 
   const refModel = targetRefModels[0]
 
