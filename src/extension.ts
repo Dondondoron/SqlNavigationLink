@@ -34,7 +34,6 @@ export async function activate(context: vscode.ExtensionContext) {
   const configListener = mainController.onChangeSettingsCommand()
   const addPathCommand = mainController.pathProvider.addPathCommand();
 
-  const removePathCommand = mainController.pathProvider.removePathCommand();
 
   // Register the sidebar view
   ;
@@ -44,7 +43,8 @@ export async function activate(context: vscode.ExtensionContext) {
     configListener,
     tableDefinitionProvider,
     addPathCommand,
-    removePathCommand,
+    mainController.pathProvider.removePathCommand(),
+    mainController.pathProvider.changePathTypeCommand(),
     mainController.openPathCommand(),
     mainController.openModelCommand(),
     mainController.parseCommand(context),

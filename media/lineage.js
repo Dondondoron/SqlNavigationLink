@@ -13,13 +13,17 @@ function generateId() {
     return Math.random().toString(36).substring(2, 9);
 }
 
-function createCard(data, isCenter = false) {
+function createCard(data, isCenter = false, direction = 'left') {
+    const cardContainer = document.createElement('div')
+    cardContainer.className = 'card_container'
     const card = document.createElement('div');
     card.className = 'node-card' + (isCenter ? ' center' : '');
 
+    const modelInfo = data.model
+
     const id = generateId()
 
-    const name = data.fullname ?? data.name
+    const name = modelInfo.fullname ?? modelInfo.name
 
     const cardHeader = document.createElement('header')
 
@@ -54,8 +58,19 @@ function createCard(data, isCenter = false) {
 
     }
 
+    const childCardContainer = document.createElement('div')
 
-    return card;
+    childCardContainer.classList.add('child_card_container', direction)
+
+    if(direction === 'left')cardContainer.appendChild(childCardContainer)
+    cardContainer.appendChild(card)
+    if(direction === 'right')cardContainer.appendChild(childCardContainer)
+
+    data.refs.forEach(ref => {
+        childCardContainer.appendChild(createCard(ref, false))
+    })
+
+    return cardContainer;
 }
 
 eventListener = (e) => {
@@ -65,9 +80,26 @@ eventListener = (e) => {
 
     if (changeSizeButton) {
         e.stopPropagation();
-        const action = changeSizeButton.dataset.action; 
+        const action = changeSizeButton.dataset.action;
 
-        if (action === 'increase' || action === 'decrease') {
+        if (action === 'left-decrease' || action === 'left-increase') {
+
+            const sizeLabel = document.getElementById('left-lineage-size-label');
+            let currentSize = Number(sizeLabel.textContent)
+            if(currentSize>1 && action === 'left-decrease') currentSize = currentSize -1
+            else if(currentSize<12 && action === 'left-increase') currentSize = currentSize + 1
+            sizeLabel.textContent = currentSize + ''
+
+            post(action);
+        }
+        if (action === 'right-decrease' || action === 'right-increase') {
+
+            const sizeLabel = document.getElementById('right-lineage-size-label');
+            let currentSize = Number(sizeLabel.textContent)
+            if(currentSize>1 && action === 'right-decrease') currentSize = currentSize -1
+            else if(currentSize<12 && action === 'right-increase') currentSize = currentSize + 1
+            sizeLabel.textContent = currentSize + ''
+
             post(action);
         }
         return;
@@ -108,6 +140,14 @@ function renderLineage(data) {
     const centerContainer = document.getElementById('center-nodes');
     const rightContainer = document.getElementById('right-nodes');
 
+    const leftSizeLabel = document.getElementById('left-lineage-size-label');
+
+    leftSizeLabel.textContent = data.size_left
+
+    const rightSizeLabel = document.getElementById('right-lineage-size-label');
+
+    rightSizeLabel.textContent = data.size_right
+
     document.removeEventListener('click', eventListener)
     document.addEventListener('click', eventListener)
 
@@ -124,7 +164,7 @@ function renderLineage(data) {
     // Left Nodes
     if (data.leftRefs && data.leftRefs.length > 0) {
         data.leftRefs.forEach(ref => {
-            leftContainer.appendChild(createCard(ref));
+            leftContainer.appendChild(createCard(ref, false, 'left'));
         });
     } else {
         leftContainer.innerHTML = '<div class="empty-state">None</div>';
@@ -133,7 +173,7 @@ function renderLineage(data) {
     // Right Nodes
     if (data.rightRefs && data.rightRefs.length > 0) {
         data.rightRefs.forEach(ref => {
-            rightContainer.appendChild(createCard(ref));
+            rightContainer.appendChild(createCard(ref, false, 'right'));
         });
     } else {
         rightContainer.innerHTML = '<div class="empty-state">None</div>';

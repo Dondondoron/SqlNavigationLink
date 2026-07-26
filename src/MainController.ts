@@ -118,12 +118,13 @@ export class MainController {
             'sql-nav-link.parsePaths',
             async () => {
 
+                const pathArguments : any[] = []
 
-                const sqlPaths: string[] = this.pathProvider.getPaths().length > 0
-                    ? this.pathProvider.getPaths().map(m => m.filePath)
-                    : (vscode.workspace.workspaceFolders ?? []).map(folder => folder.uri.fsPath);
+                this.pathProvider.getPaths().length > 0
+                    ? this.pathProvider.getPaths().forEach(m => pathArguments.push(m.filePath, m.type))
+                    : (vscode.workspace.workspaceFolders ?? []).map(folder => pathArguments.push(folder.uri.fsPath, SqlType.SQLMESH));
 
-                const models = await this.sqlModelProvider.getPythonParsePromise(sqlPaths, context);
+                const models = await this.sqlModelProvider.getPythonParsePromise(pathArguments, context);
 
                 if (models) this.sqlModelProvider.initModels(models);
 

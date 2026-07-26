@@ -10,7 +10,7 @@ import { Config } from "./Settings";
 import { logInformation } from "./logging";
 
 
-interface TableInfo {
+export interface TableInfo {
     fullname: string;
     name: string;
     db?: string;
@@ -19,7 +19,7 @@ interface TableInfo {
     fields:string[]
 }
 
-class SqlModelInfo extends vscode.TreeItem {
+export class SqlModelInfo extends vscode.TreeItem {
     constructor(
         public name: string,
         public file_name: string,
@@ -91,7 +91,7 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
     }
 
 
-    getPythonParsePromise(sqlPaths: string[], context: vscode.ExtensionContext): Promise<SqlModelsResponse | undefined> {
+    getPythonParsePromise(sqlPaths: any[], context: vscode.ExtensionContext): Promise<SqlModelsResponse | undefined> {
 
 
 
@@ -99,7 +99,7 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
 
         logInformation("Starting the parsing of files from python env: " + pythonPath)
 
-        const scriptPath = path.join(context.extensionPath, 'scripts', 'sql_crawler.py')
+        const scriptPath = path.join(context.extensionPath, 'scripts', 'run_crawler.py')
 
         return new Promise<SqlModelsResponse | undefined>((resolve) => {
             // 1. Create a unique temporary file path
@@ -114,7 +114,7 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
             // 2. Pass the tempFilePath as the third CLI argument to Python
             execFile(
                 pythonPath,
-                [scriptPath, JSON.stringify(sqlPaths), tempFilePath],
+                [scriptPath, tempFilePath, ...sqlPaths],
                 { maxBuffer: 1024 * 1024 * 10 }, // Generous 10MB stderr buffer for Python logs
                 (error: any, stdout: any, stderr: any) => {
                     if (error) {

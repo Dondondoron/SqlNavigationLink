@@ -28,6 +28,11 @@
         "icon": "$(add)"
       },
       {
+        "command": "sql-nav-link.changePathType",
+        "title": "Change SQL Path type",
+        "icon": "$(split-vertical)"
+      },
+      {
         "command": "sql-nav-link.removePath",
         "title": "Remove Path",
         "icon": "$(trash)"
@@ -91,6 +96,11 @@
       "view/item/context": [
         {
           "command": "sql-nav-link.removePath",
+          "when": "view == sqlNavLinkPaths",
+          "group": "inline"
+        },
+        {
+          "command": "sql-nav-link.changePathType",
           "when": "view == sqlNavLinkPaths",
           "group": "inline"
         }

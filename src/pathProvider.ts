@@ -18,23 +18,27 @@ export class PathTreeItem extends vscode.TreeItem {
   constructor(public readonly pathObj: PathObject) {
     super(pathObj.label, vscode.TreeItemCollapsibleState.None);
 
+
+    this.init(pathObj)
+    this.contextValue = 'pathItem';
+  }
+
+  init(pathObj: PathObject) {
+
     this.description = pathObj.description || pathObj.filePath;
     this.tooltip = `Path: ${pathObj.filePath}`;
-
-    const iconName = pathObj.type === SqlType.DBT 
-      ? 'dbt_icon.svg' 
+    const iconName = pathObj.type === SqlType.DBT
+      ? 'dbt_icon.svg'
       : 'sqlmesh_icon.svg';
 
-    // Construct a valid URI pointing to your media folder
     this.iconPath = vscode.Uri.joinPath(Config.extensionUri, 'media', iconName);
-    // This matches the context menu in package.json
-    this.contextValue = 'pathItem';
 
     this.command = {
       command: 'vscode.open',
       title: 'Open File',
       arguments: [vscode.Uri.file(pathObj.filePath)]
-    };
+    }
+
   }
 }
 
@@ -91,6 +95,32 @@ export class PathTreeDataProvider implements vscode.TreeDataProvider<PathTreeIte
       }
     )
   }
+  changePathTypeCommand() {
+    return vscode.commands.registerCommand(
+      'sql-nav-link.changePathType',
+      async (node: PathTreeItem) => {
+        if (node) {
+          const type = await vscode.window.showQuickPick(
+            [
+              SqlType.DBT,
+              SqlType.SQLMESH
+            ],
+            {
+              title: 'Select SQL Type', // Title shown above the quick pick input
+              placeHolder: 'e.g., Select DBT or SQLMESH'
+            }
+          );
+
+          if (!type) return
+
+          node.pathObj.type = type as SqlType
+
+          node.init(node.pathObj)
+
+        }
+      }
+    )
+  }
 
   addPathCommand() {
     return vscode.commands.registerCommand(
@@ -121,11 +151,24 @@ export class PathTreeDataProvider implements vscode.TreeDataProvider<PathTreeIte
           return;
         }
 
+        const type = await vscode.window.showQuickPick(
+          [
+            SqlType.DBT,
+            SqlType.SQLMESH
+          ],
+          {
+            title: 'Select SQL Type', // Title shown above the quick pick input
+            placeHolder: 'e.g., Select DBT or SQLMESH'
+          }
+        );
+
+        if (!type) return
+
         const newPathObj: PathObject = {
           id: Date.now().toString(),
           label: label,
           filePath: selectedUri.fsPath,
-          type: SqlType.SQLMESH
+          type: type as SqlType
         };
 
         this.addPath(newPathObj);

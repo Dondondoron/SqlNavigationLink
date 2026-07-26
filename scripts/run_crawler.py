@@ -6,47 +6,38 @@ import itertools
 
 if __name__ == '__main__':
 
-    sql_paths = []
+    all_models = dict()
 
-    if len(sys.argv) > 1:
-        raw_arg = sys.argv[1].strip("'\"")
-        
-        # 1. Try parsing as JSON array (for VS Code extension execFile)
-        try:
-            parsed = json.loads(raw_arg)
-            if isinstance(parsed, list):
-                sql_paths = parsed
-            elif isinstance(parsed, str):
-                sql_paths = [parsed]
-        except json.JSONDecodeError:
-            # 2. Fallback: Treat CLI arguments directly as raw folder paths
-            # This handles standard debug arguments like: python script.py "E:/path"
-            sql_paths = [arg.strip("'\"") for arg in sys.argv[1:]]
+    count = 2
+    while count < len(sys.argv) - 1:
+        path = sys.argv[count]
+        sql_type = sys.argv[count+1]
 
-    # Flatten nested folder lists from crawl_folders
+
+        crawler = SqlCrawler(path, sql_type)
+
+        raw_folders = crawler.crawl_folders([path])
+
+        folders = list(itertools.chain.from_iterable(
+            sublist if isinstance(sublist, list) else [sublist] 
+            for sublist in raw_folders
+        ))
+
+        parsed_queries = crawler.parse_files(folders)
+        sql_models = parse_sql_models_and_extract_tables(parsed_queries)
+
+        all_models.update(sql_models)
+
+        count += 2
 
     
-    crawler = SqlCrawler()
-    raw_folders = crawler.crawl_folders(sql_paths)
-
-    # Flatten any nested lists/sublists into a single list of string file paths
-    folders = list(itertools.chain.from_iterable(
-        sublist if isinstance(sublist, list) else [sublist] 
-        for sublist in raw_folders
-    ))
-
-    parsed_queries = crawler.parse_files(folders, dbt=True)
-    sql_models = parse_sql_models_and_extract_tables(parsed_queries)
-
-    # Use mode='json' so Pydantic converts set[TableInfo] -> list[dict]
-
     output_data = {
         key: model.model_dump(mode='json') if hasattr(model, 'model_dump') else model
-        for key, model in sql_models.items()
+        for key, model in all_models.items()
     }
 
-    if len(sys.argv) > 2:
-        output_file_path = sys.argv[2]
+    if len(sys.argv) > 1:
+        output_file_path = sys.argv[1]
         with open(output_file_path, 'w', encoding='utf-8') as f:
             json.dump(output_data, f)
     else:

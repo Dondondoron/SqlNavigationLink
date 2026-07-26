@@ -5,7 +5,7 @@ from sqlglot import exp
 from classes import SqlModelInfo, TableInfo
 from collections import defaultdict
 
-def parse_sql_models_and_extract_tables(self, models):
+def parse_sql_models_and_extract_tables(models):
     # Dict to store tables found per model
     model_tables = {}
     for model_key, model_value in models.items():
@@ -29,7 +29,7 @@ def parse_sql_models_and_extract_tables(self, models):
             print()
         try:
             filename = Path(model_key).name
-            sql_model = self.parseCTELess(
+            sql_model = parseCTELess(
                 model_name=model_name,
                 filename=filename,
                 file_path=model_key,
@@ -40,14 +40,14 @@ def parse_sql_models_and_extract_tables(self, models):
             model_tables[model_key] = []
     return model_tables
 
-def parseCTELess(self, model_name:str, filename:str, file_path:str, query: exp.Select):
+def parseCTELess(model_name:str, filename:str, file_path:str, query: exp.Select):
     uncte_query = query.copy()
     uncte_query.set("with_", None)
-    tables = self.parseSelect(uncte_query)
+    tables = parseSelect(uncte_query)
     ctes : set[TableInfo] = set()
     cte_names = {cte.alias_or_name.lower() for cte in query.ctes}
     for cte in query.find_all(exp.CTE):
-        cte_tables = self.parseSelect(cte)
+        cte_tables = parseSelect(cte)
         tables |= cte_tables  # Or: tables.update(cte_tables)
     for table in set(tables):
         ref_table_name = table.fullname
@@ -61,7 +61,7 @@ def parseCTELess(self, model_name:str, filename:str, file_path:str, query: exp.S
                          file_path=file_path, 
                          table_names=tables, 
                          cte_names=ctes)
-def parseTableFields(self, query:exp.Select|exp.CTE):
+def parseTableFields(query:exp.Select|exp.CTE):
      alias_to_table = {}
      for table in query.find_all(exp.Table):
          real_name = table.name
@@ -81,9 +81,10 @@ def parseTableFields(self, query:exp.Select|exp.CTE):
                          else:
                              unprefixed_fields.add(col_name)
      return [table_fields, unprefixed_fields]
-def parseSelect(self, query: exp.Select|exp.CTE):
+
+def parseSelect(query: exp.Select|exp.CTE):
      
-            table_fields, unprefixed_fields = self.parseTableFields(query)
+            table_fields, unprefixed_fields = parseTableFields(query)
             
             all_tables = query.find_all(exp.Table)
             tables: set[TableInfo] = set()
