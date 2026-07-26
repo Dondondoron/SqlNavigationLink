@@ -19,7 +19,7 @@
   "activationEvents": [
     "onView:sqlmesh-localite-functions-view"
   ],
-  "main": "./out/extension.js",
+  "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
@@ -45,13 +45,38 @@
           "title": "SQL Nav Link",
           "icon": "./media/sidebar.svg"
         }
+      ],
+      "panel": [
+        {
+          "id": "sql-nav-link-panel",
+          "title": "SQL Nav Link",
+          "icon": "./media/sidebar.svg"
+        }
       ]
     },
     "views": {
       "sql-nav-link-sidebar": [
         {
-          "id": "sqlNavLinkView", 
+          "type": "tree",
+          "id": "sqlNavLinkPaths", 
+          "name": "SQL Folder Paths"
+        },
+        {
+          "type": "webview",
+          "id": "sql-nav-link.parseView", 
+          "name": "SQL Parsing"
+        },
+        {
+          "type": "tree",
+          "id": "sql-nav-link.modelTree", 
           "name": "SQL Models"
+        }
+      ],
+      "sql-nav-link-panel": [
+        {
+          "type": "webview",
+          "id": "sql-nav-link-panel.Lineage", 
+          "name": "SQL Folder Paths"
         }
       ]
     },
@@ -59,14 +84,14 @@
       "view/title": [
         {
           "command": "sql-nav-link.addPath",
-          "when": "view == sqlNavLinkView",
+          "when": "view == sqlNavLinkPaths",
           "group": "navigation"
         }
       ],
       "view/item/context": [
         {
           "command": "sql-nav-link.removePath",
-          "when": "view == sqlNavLinkView",
+          "when": "view == sqlNavLinkPaths",
           "group": "inline"
         }
       ]

@@ -6,6 +6,12 @@ export let writeEmitter = new vscode.EventEmitter<string>();
 let sqlMeshTerminal: vscode.Terminal | undefined;
 
 
+export function logInformation(message: string) {
+
+  console.log(message);
+  vscode.window.showInformationMessage(message);
+}
+
 
 export function getSqlLinkTerminal() {
     if (!sqlMeshTerminal) {

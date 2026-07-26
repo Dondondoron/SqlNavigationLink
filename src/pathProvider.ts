@@ -27,9 +27,9 @@ export class PathTreeItem extends vscode.TreeItem {
 }
 
 export class PathTreeDataProvider implements vscode.TreeDataProvider<PathTreeItem> {
-  private _onDidChangeTreeData: vscode.EventEmitter<PathTreeItem | undefined | void> = 
+  private _onDidChangeTreeData: vscode.EventEmitter<PathTreeItem | undefined | void> =
     new vscode.EventEmitter<PathTreeItem | undefined | void>();
-  readonly onDidChangeTreeData: vscode.Event<PathTreeItem | undefined | void> = 
+  readonly onDidChangeTreeData: vscode.Event<PathTreeItem | undefined | void> =
     this._onDidChangeTreeData.event;
 
   private pathObjects: PathObject[] = [];
@@ -67,5 +67,56 @@ export class PathTreeDataProvider implements vscode.TreeDataProvider<PathTreeIte
       return this.pathObjects.map(obj => new PathTreeItem(obj));
     }
     return [];
+  }
+
+  removePathCommand() {
+    return vscode.commands.registerCommand(
+      'sql-nav-link.removePath',
+      (node: PathTreeItem) => {
+        if (node) {
+          this.removePath(node);
+        }
+      }
+    )
+  }
+
+  addPathCommand() {
+    return vscode.commands.registerCommand(
+      'sql-nav-link.addPath',
+      async () => {
+        // Option A: Open native File/Folder picker
+        const fileUris = await vscode.window.showOpenDialog({
+          canSelectFiles: true,
+          canSelectFolders: true,
+          canSelectMany: false,
+          openLabel: 'Select Path'
+        });
+
+        if (!fileUris || fileUris.length === 0) {
+          return;
+        }
+
+        const selectedUri = fileUris[0];
+
+        // Option B: Prompt for a custom label/name using standard InputBox
+        const label = await vscode.window.showInputBox({
+          prompt: 'Enter a name/label for this path',
+          placeHolder: 'e.g., Input Dataset, Script Entry',
+          value: selectedUri.path.split('/').pop()
+        });
+
+        if (!label) {
+          return;
+        }
+
+        const newPathObj: PathObject = {
+          id: Date.now().toString(),
+          label: label,
+          filePath: selectedUri.fsPath
+        };
+
+        this.addPath(newPathObj);
+      }
+    )
   }
 }

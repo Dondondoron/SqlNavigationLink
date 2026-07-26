@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
-export class SidebarProvider implements vscode.WebviewViewProvider {
-    public static readonly viewType = 'sqlmesh-localite.context';
+export class ParseViewProvider implements vscode.WebviewViewProvider {
+    public static readonly viewType = 'sqlNavLinkParser';
 
     resolveWebviewView(webviewView: vscode.WebviewView) {
         webviewView.webview.options = { enableScripts: true };
