@@ -26,12 +26,15 @@ export class PathTreeItem extends vscode.TreeItem {
   init(pathObj: PathObject) {
 
     this.description = pathObj.description || pathObj.filePath;
-    this.tooltip = `Path: ${pathObj.filePath}`;
+    this.tooltip = `Type: ${pathObj.type}, Path: ${pathObj.filePath}`;
     const iconName = pathObj.type === SqlType.DBT
       ? 'dbt_icon.svg'
       : 'sqlmesh_icon.svg';
 
-    this.iconPath = vscode.Uri.joinPath(Config.extensionUri, 'media', iconName);
+    this.iconPath = {
+      dark:vscode.Uri.joinPath(Config.extensionUri, 'media',  'dark_'+iconName),
+      light:vscode.Uri.joinPath(Config.extensionUri, 'media', 'light_'+iconName)
+    }
 
     this.command = {
       command: 'vscode.open',
@@ -117,6 +120,7 @@ export class PathTreeDataProvider implements vscode.TreeDataProvider<PathTreeIte
 
           node.init(node.pathObj)
 
+          this.refresh()
         }
       }
     )

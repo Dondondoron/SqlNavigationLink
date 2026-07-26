@@ -33,7 +33,7 @@ function createCard(data, isCenter = false, direction = 'left') {
     const fieldButton = document.createElement('button')
     fieldButton.className = 'fieldButton'
     fieldButton.dataset.card = id
-    fieldButton.textContent = "⬇"
+    fieldButton.textContent = "≡"
 
     cardHeader.appendChild(titleSpan)
 
@@ -43,15 +43,16 @@ function createCard(data, isCenter = false, direction = 'left') {
 
         cardHeader.appendChild(fieldButton)
 
-        fieldsContainer = document.createElement('div')
+        fieldsContainer = document.createElement('ul') 
         fieldsContainer.id = id
         fieldsContainer.style.display = 'none'
+        fieldsContainer.className = 'fields-container'
 
         for (const field of data.fields) {
-
-            fieldSpan = document.createElement('span')
-            fieldSpan.textContent = field
-            fieldsContainer.appendChild(fieldSpan)
+            const fieldItem = document.createElement('li') 
+            fieldItem.className = 'field-item'
+            fieldItem.textContent = field
+            fieldsContainer.appendChild(fieldItem)
         }
 
         card.appendChild(fieldsContainer)
@@ -62,9 +63,9 @@ function createCard(data, isCenter = false, direction = 'left') {
 
     childCardContainer.classList.add('child_card_container', direction)
 
-    if(direction === 'left')cardContainer.appendChild(childCardContainer)
+    if (direction === 'left') cardContainer.appendChild(childCardContainer)
     cardContainer.appendChild(card)
-    if(direction === 'right')cardContainer.appendChild(childCardContainer)
+    if (direction === 'right') cardContainer.appendChild(childCardContainer)
 
     data.refs.forEach(ref => {
         childCardContainer.appendChild(createCard(ref, false))
@@ -86,8 +87,8 @@ eventListener = (e) => {
 
             const sizeLabel = document.getElementById('left-lineage-size-label');
             let currentSize = Number(sizeLabel.textContent)
-            if(currentSize>1 && action === 'left-decrease') currentSize = currentSize -1
-            else if(currentSize<12 && action === 'left-increase') currentSize = currentSize + 1
+            if (currentSize > 1 && action === 'left-decrease') currentSize = currentSize - 1
+            else if (currentSize < 12 && action === 'left-increase') currentSize = currentSize + 1
             sizeLabel.textContent = currentSize + ''
 
             post(action);
@@ -96,8 +97,8 @@ eventListener = (e) => {
 
             const sizeLabel = document.getElementById('right-lineage-size-label');
             let currentSize = Number(sizeLabel.textContent)
-            if(currentSize>1 && action === 'right-decrease') currentSize = currentSize -1
-            else if(currentSize<12 && action === 'right-increase') currentSize = currentSize + 1
+            if (currentSize > 1 && action === 'right-decrease') currentSize = currentSize - 1
+            else if (currentSize < 12 && action === 'right-increase') currentSize = currentSize + 1
             sizeLabel.textContent = currentSize + ''
 
             post(action);
@@ -113,7 +114,7 @@ eventListener = (e) => {
         if (fieldContainer) {
             const isHidden = fieldContainer.style.display === 'none';
             fieldContainer.style.display = isHidden ? 'flex' : 'none';
-            button.textContent = isHidden ? '⬆' : '⬇';
+            button.textContent = isHidden ? '⬆' : '≡';
         }
         return;
     }
