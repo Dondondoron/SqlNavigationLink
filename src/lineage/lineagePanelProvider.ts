@@ -18,7 +18,19 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
 
         webviewView.webview.onDidReceiveMessage(data => {
 
-            vscode.commands.executeCommand('sql-nav-link.openModel', data)
+            switch(data.command){
+                case "browse":
+                    vscode.commands.executeCommand('sql-nav-link.openModel', data.args[0])
+                break;
+                case "increase":
+                    vscode.commands.executeCommand('sql-nav-link.openModel', data.args[0])
+                break;
+                case "decrease":
+                    vscode.commands.executeCommand('sql-nav-link.openModel', data.args[0])
+                break;
+            }
+
+            
 
         });
 

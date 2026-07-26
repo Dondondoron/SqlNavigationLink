@@ -81,7 +81,7 @@ export class MainController {
                 const doc = await vscode.workspace.openTextDocument(uri);
                 await vscode.window.showTextDocument(doc, { preview: true });
 
-                vscode.window.showInformationMessage(`Opened: ${path}`);
+                vscode.window.showInformationMessage(`Opened: ${uri.path}`);
             } catch (error) {
                 vscode.window.showErrorMessage(`Failed to open path: ${error}`);
             }

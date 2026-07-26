@@ -61,6 +61,18 @@ function createCard(data, isCenter = false) {
 eventListener = (e) => {
 
 
+    const changeSizeButton = e.target.closest('button[data-action]');
+
+    if (changeSizeButton) {
+        e.stopPropagation();
+        const action = changeSizeButton.dataset.action; 
+
+        if (action === 'increase' || action === 'decrease') {
+            post(action);
+        }
+        return;
+    }
+
     const button = e.target.closest('.fieldButton');
     if (button) {
         e.stopPropagation();
@@ -73,13 +85,22 @@ eventListener = (e) => {
         }
         return;
     }
+
+
     const card = e.target.closest('.node-card');
     if (card) {
         const headerSpan = card.querySelector('header span');
         if (headerSpan?.textContent) {
-            vscode.postMessage(headerSpan.textContent);
+            post('browse', headerSpan.textContent)
         }
     }
+}
+
+function post(command, ...args) {
+    vscode.postMessage({
+        command: command,
+        args: args
+    })
 }
 
 function renderLineage(data) {
