@@ -32,8 +32,8 @@ export class PathTreeItem extends vscode.TreeItem {
       : 'sqlmesh_icon.svg';
 
     this.iconPath = {
-      dark:vscode.Uri.joinPath(Config.extensionUri, 'media',  'dark_'+iconName),
-      light:vscode.Uri.joinPath(Config.extensionUri, 'media', 'light_'+iconName)
+      dark:vscode.Uri.joinPath(Config.extensionUri, 'media', 'icons',  'dark',  iconName),
+      light:vscode.Uri.joinPath(Config.extensionUri, 'media', 'icons', 'light', iconName)
     }
 
     this.command = {

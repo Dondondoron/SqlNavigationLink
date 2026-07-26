@@ -161,14 +161,14 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
     private _getHtmlForWebview(webview: vscode.Webview): string {
         // Convert local file paths into Webview URIs
         const cssUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'media', 'lineage.css')
+            vscode.Uri.joinPath(this._extensionUri, 'media', 'webviewLineage','lineage.css')
         );
         const jsUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'media', 'lineage.js')
+            vscode.Uri.joinPath(this._extensionUri, 'media', 'webviewLineage', 'lineage.js')
         );
 
         // Read HTML template from disk
-        const htmlPath = path.join(this._extensionUri.fsPath, 'media', 'lineage.html');
+        const htmlPath = path.join(this._extensionUri.fsPath, 'media', 'webviewLineage', 'lineage.html');
         let htmlContent = fs.readFileSync(htmlPath, 'utf8');
 
         // Replace placeholders with real URIs
