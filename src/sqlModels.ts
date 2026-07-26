@@ -33,7 +33,7 @@ class SqlModelTreeProvider implements vscode.TreeDataProvider<ModelTreeItem> {
       "..",
       "src",
       "sql_crawler",
-      "sql_crawler.py",
+      "run_crawler.py",
     );
 
     return new Promise((resolve, reject) => {
