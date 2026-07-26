@@ -3,9 +3,9 @@
 import * as vscode from "vscode";
 import * as path from "path";
 
-import { PathObject, PathTreeDataProvider } from "./pathProvider";
+import { PathObject, PathTreeDataProvider, SqlType } from "./pathProvider";
 import { SqlModelProvider } from "./modelProvider";
-import { PythonConfig } from "./Settings";
+import { Config } from "./Settings";
 import { logInformation } from "./logging";
 import { ControlPanelProvider } from "./planController";
 import { LineagePanelProvider } from "./lineage/lineagePanelProvider";
@@ -21,6 +21,7 @@ export class MainController {
     lineagePanelProvider: LineagePanelProvider
 
     constructor(context: vscode.ExtensionContext) {
+        
 
         const defaultPaths: PathObject[] = (vscode.workspace.workspaceFolders ?? []).map(folder => {
             folder.uri.fsPath
@@ -29,7 +30,8 @@ export class MainController {
             return {
                 id: folder.uri.fsPath ?? '',
                 label: label ?? '',
-                filePath: folder.uri.fsPath
+                filePath: folder.uri.fsPath,
+                type:SqlType.DBT
             };
         })
 
@@ -143,7 +145,7 @@ export class MainController {
                 console.log('Python path changed to:', updatedPythonPath);
                 vscode.window.showInformationMessage(`Updated Python Path: ${updatedPythonPath}`);
 
-                if (updatedPythonPath) PythonConfig.pythonPath = updatedPythonPath
+                if (updatedPythonPath) Config.pythonPath = updatedPythonPath
                 // Re-initialize or handle your Python execution logic here...
             }
         })

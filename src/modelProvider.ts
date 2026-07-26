@@ -6,7 +6,7 @@ import * as fs from 'fs';
 
 import { execFile } from "child_process";
 
-import { PythonConfig } from "./Settings";
+import { Config } from "./Settings";
 import { logInformation } from "./logging";
 
 
@@ -95,7 +95,7 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
 
 
 
-        const pythonPath = PythonConfig.pythonPath
+        const pythonPath = Config.pythonPath
 
         logInformation("Starting the parsing of files from python env: " + pythonPath)
 

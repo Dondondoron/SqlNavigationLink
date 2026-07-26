@@ -1,11 +1,18 @@
 import * as vscode from 'vscode';
+import { Config } from './Settings';
 
+export enum SqlType {
+  SQLMESH = 'SQLMESH',
+  DBT = 'DBT'
+}
 export interface PathObject {
   id: string;
   label: string;
   filePath: string;
   description?: string;
+  type: SqlType
 }
+
 
 export class PathTreeItem extends vscode.TreeItem {
   constructor(public readonly pathObj: PathObject) {
@@ -13,8 +20,13 @@ export class PathTreeItem extends vscode.TreeItem {
 
     this.description = pathObj.description || pathObj.filePath;
     this.tooltip = `Path: ${pathObj.filePath}`;
-    this.iconPath = vscode.ThemeIcon.File;
 
+    const iconName = pathObj.type === SqlType.DBT 
+      ? 'dbt_icon.svg' 
+      : 'sqlmesh_icon.svg';
+
+    // Construct a valid URI pointing to your media folder
+    this.iconPath = vscode.Uri.joinPath(Config.extensionUri, 'media', iconName);
     // This matches the context menu in package.json
     this.contextValue = 'pathItem';
 
@@ -112,7 +124,8 @@ export class PathTreeDataProvider implements vscode.TreeDataProvider<PathTreeIte
         const newPathObj: PathObject = {
           id: Date.now().toString(),
           label: label,
-          filePath: selectedUri.fsPath
+          filePath: selectedUri.fsPath,
+          type: SqlType.SQLMESH
         };
 
         this.addPath(newPathObj);

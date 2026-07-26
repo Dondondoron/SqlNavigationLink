@@ -5,7 +5,7 @@ import * as os from 'os';
 
 
 import { MainController } from "./MainController";
-import { PythonConfig } from "./Settings";
+import { Config } from "./Settings";
 
 
 
@@ -23,6 +23,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
 
   await setUpPython(context, config, pythonPath);
+
+  Config.extensionUri = context.extensionUri
 
 
   const mainController = new MainController(context)
@@ -83,7 +85,7 @@ async function setUpPython(context: vscode.ExtensionContext, config: vscode.Work
 
     try {
 
-      PythonConfig.pythonPath = pythonPath
+      Config.pythonPath = pythonPath
 
       return true
 

@@ -1,6 +1,9 @@
+import * as vscode from 'vscode';
 
-export class PythonConfig {
+export class Config {
 
   static pythonPath: string
+
+  static extensionUri:vscode.Uri
 
 }
