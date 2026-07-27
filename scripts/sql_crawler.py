@@ -101,11 +101,11 @@ class SqlCrawler:
         self.env = Environment()
         self.sql_type = sql_type
 
-        if sql_type == 'dbt':
+        if sql_type == 'DBT':
             extracted_vars = extract_dbt_variables(path)
     
             self.env.globals = CatchAllGlobals({
-                "ref": lambda *args: f"public.{args[-1]}",
+                "ref": lambda *args: f"{args[-1]}",
                 "source": lambda source_name, table_name: f"{source_name}.{table_name}",
                 "var": lambda name, default=None: extracted_vars.get(name, default or f"/* var_{name} */")
             })
@@ -121,7 +121,7 @@ class SqlCrawler:
                     with open(path, 'r', encoding='utf-8') as file:
                         sql_content = file.read()
 
-                    if self.sql_type == 'dbt':
+                    if self.sql_type == 'DBT':
                         clean_sql = re.sub(r"{{\s*config\([\s\S]*?\)\s*}}", "", sql_content)
 
                         template = self.env.from_string(clean_sql)

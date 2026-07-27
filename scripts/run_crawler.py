@@ -4,6 +4,18 @@ import sys
 import json
 import itertools
 
+#import debugpy
+#if not debugpy.is_client_connected():
+#    # Listen on localhost, port 5678
+#    debugpy.listen(("127.0.0.1", 5678))
+#    print("🤖 Debugger waiting for VS Code to attach on port 5678...", flush=True)
+#    
+#    # This line freezes script execution until you connect from VS Code
+#    debugpy.wait_for_client() 
+#    
+#    # Optional: Hardcode an initial breakpoint right after connection
+#    debugpy.breakpoint() 
+
 if __name__ == '__main__':
 
     all_models = dict()

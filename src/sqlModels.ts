@@ -41,7 +41,7 @@ class SqlModelTreeProvider implements vscode.TreeDataProvider<ModelTreeItem> {
       execFile(
         "python",
         [scriptPath, workspacePath],
-        (error, stdout, stderr) => {
+        (error:any, stdout:any, stderr:any) => {
           if (error) {
             vscode.window.showErrorMessage(
               `SQL Scanner Error: ${stderr || error.message}`,
