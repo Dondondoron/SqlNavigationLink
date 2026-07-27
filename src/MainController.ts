@@ -3,25 +3,26 @@
 import * as vscode from "vscode";
 import * as path from "path";
 
-import { PathObject, PathTreeDataProvider, SqlType } from "./pathProvider";
+import { PathObject, SqlType } from "./pathClasses";
 import { SqlModelProvider } from "./modelProvider";
-import { Config } from "./Settings";
-import { logInformation } from "./logging";
-import { ControlPanelProvider } from "./planController";
 import { LineagePanelProvider } from "./lineage/lineagePanelProvider";
+import { ParseViewProvider } from "./parsing/parsingProvider";
+import { PythonSupplier } from "./pythonSupplier";
+import { logError } from "./logging";
 
 
 export class MainController {
     commandParseController!: vscode.Disposable;
 
-
-    pathProvider: PathTreeDataProvider
     sqlModelProvider: SqlModelProvider;
-    planController: ControlPanelProvider
+    parseView: ParseViewProvider
     lineagePanelProvider: LineagePanelProvider
 
+    pythonSupplier: PythonSupplier
+
+
     constructor(context: vscode.ExtensionContext) {
-        
+
 
         const defaultPaths: PathObject[] = (vscode.workspace.workspaceFolders ?? []).map(folder => {
             folder.uri.fsPath
@@ -31,22 +32,24 @@ export class MainController {
                 id: folder.uri.fsPath ?? '',
                 label: label ?? '',
                 filePath: folder.uri.fsPath,
-                type:SqlType.DBT
+                type: SqlType.DBT
             };
         })
 
-        this.pathProvider = new PathTreeDataProvider(defaultPaths);
+        this.pythonSupplier = new PythonSupplier(context)
+        
         this.sqlModelProvider = new SqlModelProvider()
         this.lineagePanelProvider = new LineagePanelProvider(context.extensionUri, this.sqlModelProvider)
-        this.planController = new ControlPanelProvider(context)
+        this.parseView = new ParseViewProvider(this.pythonSupplier, context.extensionUri, defaultPaths)
 
 
     }
 
+
     fileOpenListener() {
         return vscode.window.onDidChangeActiveTextEditor((editor) => {
-            if(!editor) return
-            
+            if (!editor) return
+
             const document = editor.document
             // Example: Ignore non-file schemes (like output panels, webviews, git views, etc.)
             if (document.uri.scheme !== 'file' || !document.fileName.endsWith('.sql')) {
@@ -70,9 +73,9 @@ export class MainController {
                 vscode.window.showErrorMessage('No model name provided to open.');
                 return;
             }
-            const model = Array.from(this.sqlModelProvider.models).find(m=> m[1].name === modelName)
-            if(!model){
-                vscode.window.showErrorMessage('No model with name '+ modelName + ' found');
+            const model = Array.from(this.sqlModelProvider.models).find(m => m[1].name === modelName)
+            if (!model) {
+                vscode.window.showErrorMessage('No model with name ' + modelName + ' found');
                 return;
             }
             try {
@@ -118,13 +121,18 @@ export class MainController {
             'sql-nav-link.parsePaths',
             async () => {
 
-                const pathArguments : any[] = []
+                const pathArguments: any[] = []
 
-                this.pathProvider.getPaths().length > 0
-                    ? this.pathProvider.getPaths().forEach(m => pathArguments.push(m.filePath, m.type))
-                    : (vscode.workspace.workspaceFolders ?? []).map(folder => pathArguments.push(folder.uri.fsPath, SqlType.SQLMESH));
+                this.parseView.pathObjects.forEach(m => pathArguments.push(m.filePath, m.type))
 
-                const models = await this.sqlModelProvider.getPythonParsePromise(pathArguments, context);
+                const pythonEnv = this.pythonSupplier.getCurrenPythonEnv()
+
+                if(!pythonEnv){
+                    logError('Unable to find python environment executable for parsing')
+                    return
+                }
+
+                const models = await this.sqlModelProvider.getPythonParsePromise(pythonEnv.pythonExecutable, pathArguments, context);
 
                 if (models) this.sqlModelProvider.initModels(models);
 
@@ -132,22 +140,24 @@ export class MainController {
         )
     }
 
+    updatePythonEnvironmentCommand() {
+        return vscode.commands.registerCommand(
+            'sql-nav-link.pythonRefresh',
+            async () => {
+                this.parseView.refreshPython()
+            }
+        )
+    }
+
 
     onChangeSettingsCommand() {
         return vscode.workspace.onDidChangeConfiguration(async event => {
-            // Check if the specific setting (or whole section) was affected
             if (event.affectsConfiguration('Dondondoron.sql-nav-link.pythonPath')) {
-
-                // Read the updated value
-                const updatedPythonPath = vscode.workspace
-                    .getConfiguration('Dondondoron.sql-nav-link')
-                    .get<string>('pythonPath');
-
-                console.log('Python path changed to:', updatedPythonPath);
-                vscode.window.showInformationMessage(`Updated Python Path: ${updatedPythonPath}`);
-
-                if (updatedPythonPath) Config.pythonPath = updatedPythonPath
-                // Re-initialize or handle your Python execution logic here...
+                await this.pythonSupplier.getConfigEnv()
+                this.parseView.refreshPython()
+            }
+            else if (event.affectsConfiguration('Dondondoron.sql-nav-link.autoContext')) {
+                this.parseView.refreshAutoContext()
             }
         })
     }

@@ -91,11 +91,7 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
     }
 
 
-    getPythonParsePromise(sqlPaths: any[], context: vscode.ExtensionContext): Promise<SqlModelsResponse | undefined> {
-
-
-
-        const pythonPath = Config.pythonPath
+    getPythonParsePromise(pythonPath: string, sqlPaths: any[], context: vscode.ExtensionContext): Promise<SqlModelsResponse | undefined> {
 
         logInformation("Starting the parsing of files from python env: " + pythonPath)
 

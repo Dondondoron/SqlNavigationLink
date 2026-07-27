@@ -3,7 +3,7 @@
   "displayName": "sql-nav-link",
   "description": "API for interactive Context in SQLMESH Project",
   "publisher": "Dondondoron",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "license": "GPL-3.0",
   "icon": "./media/thumb.png",
   "repository": {
@@ -62,11 +62,6 @@
     "views": {
       "sql-nav-link-sidebar": [
         {
-          "type": "tree",
-          "id": "sqlNavLinkPaths", 
-          "name": "SQL Folder Paths"
-        },
-        {
           "type": "webview",
           "id": "sql-nav-link.parseView", 
           "name": "SQL Parsing"
@@ -107,12 +102,12 @@
       ]
     },
     "configuration": {
-      "title": "SqlMesh Localite Context",
+      "title": "SQL Navigation Link",
       "properties": {
         "Dondondoron.sql-nav-link.pythonPath": {
           "type": "string",
           "default": "",
-          "description": "Enter the path to your python environment including sqlmesh"
+          "description": "Enter the path to your python environment including sqlmesh or sqlglot + jinja"
         },
         "Dondondoron.sql-nav-link.autoContext": {
           "type": "boolean",

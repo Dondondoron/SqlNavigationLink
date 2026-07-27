@@ -147,7 +147,7 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
 
         // Post message to the client side JS inside the webview
         this._view.webview.postMessage({
-            command: 'updateLineage',
+            command: 'renderLineage',
             data: {
                 centerModel: { model: model, refs: [] },
                 leftRefs,

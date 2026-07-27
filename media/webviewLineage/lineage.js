@@ -4,7 +4,7 @@ const vscode = acquireVsCodeApi();
 window.addEventListener('message', event => {
     const message = event.data;
 
-    if (message.command === 'updateLineage') {
+    if (message.command === 'renderLineage') {
         renderLineage(message.data);
     }
 });

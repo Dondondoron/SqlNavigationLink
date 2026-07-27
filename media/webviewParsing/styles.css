@@ -1,0 +1,265 @@
+:root {
+    color-scheme: light dark;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 20px;
+
+    background: var(--vscode-editor-background);
+    color: var(--vscode-editor-foreground);
+
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+}
+
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+h1 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+h2 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.card {
+    background: var(--vscode-sideBar-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 6px;
+    padding: 16px;
+}
+
+.section-header {
+    margin-bottom: 12px;
+}
+
+.path-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.path-row {
+    display: flex;
+    gap: 8px;
+}
+
+.path-input {
+    flex: 1;
+
+    padding: 6px 8px;
+
+    color: var(--vscode-input-foreground);
+    background: var(--vscode-input-background);
+
+    border: 1px solid var(--vscode-input-border);
+
+    border-radius: 4px;
+}
+
+.path-input:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+}
+
+.button-row {
+    margin-top: 16px;
+
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+button {
+    cursor: pointer;
+
+    padding: 8px 14px;
+
+    border-radius: 4px;
+    border: none;
+
+    font-family: inherit;
+}
+
+.primary {
+    color: var(--vscode-button-foreground);
+    background: var(--vscode-button-background);
+}
+
+.primary:hover {
+    background: var(--vscode-button-hoverBackground);
+}
+
+.secondary {
+    color: var(--vscode-button-secondaryForeground);
+    background: var(--vscode-button-secondaryBackground);
+}
+
+.secondary:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.icon-button {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+}
+
+.icon-button:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+details {
+    overflow: hidden;
+}
+
+summary {
+    cursor: pointer;
+    user-select: none;
+    font-weight: 600;
+}
+
+.details-content {
+    margin-top: 16px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.readonly-box {
+    padding: 8px;
+
+    background: var(--vscode-input-background);
+
+    border: 1px solid var(--vscode-input-border);
+
+    border-radius: 4px;
+}
+
+.checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+
+/*
+
+PYTHON CONTAINER
+
+*/
+
+
+#python-env-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+    padding: 12px;
+    font-family: var(--vscode-font-family);
+    color: var(--vscode-foreground);
+}
+
+.py-card {
+    background-color: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.25));
+    border-radius: 6px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.py-card.selected{
+    border: 2px solid var(--vscode-focusBorder, #6765cf);
+}
+
+.py-card:hover {
+    border-color: var(--vscode-focusBorder);
+}
+
+.py-card-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.py-env-name {
+    margin: 0;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--vscode-symbolIcon-classForeground, var(--vscode-foreground));
+}
+
+.py-source-badge {
+    background-color: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75em;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.py-card-details p {
+    margin: 4px 0;
+    font-size: 0.85em;
+    word-break: break-all;
+}
+
+.py-card-details code {
+    font-family: var(--vscode-editor-font-family);
+    background-color: var(--vscode-textCodeBlock-background);
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+/* Collapsible Packages List */
+.py-pkg-section summary {
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: bold;
+    color: var(--vscode-textLink-foreground);
+    margin-bottom: 6px;
+}
+
+.py-pkg-list {
+    list-style: none;
+    padding: 0;
+    margin: 6px 0 0 0;
+    max-height: 150px;
+    overflow-y: auto;
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.15));
+    border-radius: 4px;
+}
+
+.py-pkg-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 8px;
+    font-size: 0.8em;
+    border-bottom: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.1));
+}
+
+.py-pkg-list li:last-child {
+    border-bottom: none;
+}
+
+.pkg-name {
+    font-weight: 500;
+}
+
+.pkg-version {
+    opacity: 0.7;
+    font-family: var(--vscode-editor-font-family);
+}
