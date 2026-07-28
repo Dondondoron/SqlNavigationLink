@@ -110,7 +110,7 @@ button:hover {
     width: fit-content;
     border: 1px solid var(--vscode-widget-border, #333);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin: 4px;
+    margin: 1px;
 }
 
 .node-card button {
@@ -162,7 +162,7 @@ button:hover {
 
 
 .lineage-size-container {
-    position: absolute;
+    position: fixed;
     display: flex;
     top: 0px;
     background: var(--vscode-banner-background);
