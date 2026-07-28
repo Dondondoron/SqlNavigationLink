@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import { execFile } from "child_process";
 
 import { Config } from "./Settings";
-import { logInformation } from "./logging";
+import { logError, logInformation } from "./logging";
 
 
 export interface TableInfo {
@@ -114,41 +114,29 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
                 { maxBuffer: 1024 * 1024 * 10 }, // Generous 10MB stderr buffer for Python logs
                 (error: any, stdout: any, stderr: any) => {
                     if (error) {
-                        vscode.window.showErrorMessage(
-                            `SQL Scanner Error: ${stderr || error.message}`
-                        );
-                        cleanup();
-                        return resolve(undefined);
+                        logError(`SQL Scanner Error: ${stderr || error.message}`, error.message)
                     }
 
                     // 3. Read the output directly from the file
                     fs.readFile(tempFilePath, 'utf-8', (readErr, rawData) => {
-                        cleanup(); // Always clean up as soon as reading finishes or fails
+                        cleanup(); 
 
                         if (readErr) {
-                            vscode.window.showErrorMessage(
-                                `SQL Scanner Error: Could not read temporary output file.`
-                            );
+                            logError(`SQL Scanner Error: Could not read temporary output file.`)
                             return resolve(undefined);
                         }
 
                         try {
                             const models: SqlModelsResponse = JSON.parse(rawData);
 
-                            // Access your parsed data
-                            for (const [filePath, modelInfo] of Object.entries(models)) {
-                                console.log(`Model Path: ${filePath}`);
-                                console.log(`Model Name: ${modelInfo.name}`);
-                                console.log(`Tables:`, modelInfo.table_names);
-                            }
-
+                            
                             logInformation(
                                 "Successfully parsed " + Object.keys(models).length + " SQL files"
                             );
 
                             resolve(models);
                         } catch (e) {
-                            vscode.window.showErrorMessage("Failed to parse Python JSON output");
+                            logError("Failed to parse Python JSON output");
                             resolve(undefined);
                         }
                     });
