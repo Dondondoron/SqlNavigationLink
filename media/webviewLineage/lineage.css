@@ -32,8 +32,9 @@ button:hover {
     align-items: center;
     gap: 16px;
     min-height: 250px;
+    transition: transform 0.05s ease-out; /* Smooths out wheel steps slightly */
+    transform-origin: center center;            /* Adjust to 'center center' if preferred */
 }
-
 .column {
     display: flex;
     flex-direction: column;
@@ -84,10 +85,6 @@ button:hover {
     flex-wrap: nowrap;
 }
 
-.node-card header span {
-    font-size: large;
-}
-
 .node-card ul {
     display: flex;
     flex-direction: column;
@@ -118,9 +115,9 @@ button:hover {
 
 .node-card button {
     margin-left: 5px;
-    width: 24px;
-    height: 24px;
-    font-size: 24px;
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
 }
 
 
