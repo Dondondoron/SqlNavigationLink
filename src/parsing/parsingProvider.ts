@@ -18,7 +18,7 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
 
     constructor(
         pythonSupplier: PythonSupplier,
-        private readonly _extensionUri: vscode.Uri,
+        private context: vscode.ExtensionContext,
         initialPaths?: PathObject[]
     ) {
         this.pythonSupplier = pythonSupplier
@@ -50,6 +50,12 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
                 case "changeSelectedEnv":
                     this.pythonSupplier.selectedEnvPath = data.args[0]
                     break;
+                case "selectPythonEnv":
+                    await this.pythonSupplier.setNewConfigPythonEnv()
+                    break;
+                case "refreshPythonEnv":
+                    await this.refreshPython()
+                    break;
                 case "autoContext":
                     const checkboxValue = Boolean(data.args[0]);
 
@@ -67,9 +73,20 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
 
         });
 
+        webviewView.onDidChangeVisibility((e) => {
+            if (webviewView.visible) {
+
+                this.updatePaths()
+                this.updatePython()
+                this.refreshAutoContext()
+
+
+            }
+        })
+
         webviewView.webview.options = {
             enableScripts: true,
-            localResourceRoots: [this._extensionUri]
+            localResourceRoots: [this.context.extensionUri]
         };
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
@@ -83,8 +100,10 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
             .get('autoContext', false);
 
 
-        if (autoLoadContext) this.refreshAutoContext()
-
+        if (autoLoadContext) {
+            this.refreshAutoContext()
+            vscode.commands.executeCommand('sql-nav-link.parsePaths')
+        }
     }
 
     refreshAutoContext() {
@@ -112,6 +131,15 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
             data: this.pathObjects
         });
     }
+    updatePython() {
+        if (this._view)
+            this._view.webview.postMessage({
+                command: 'refreshPython',
+                data: this.pythonSupplier.pythonVenvs,
+                selectedEnv: this.pythonSupplier.selectedEnvPath
+            });
+    }
+
 
     async refreshPython() {
         if (!this._view) {
@@ -126,25 +154,22 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
 
         if (!this.pythonSupplier.selectedEnvPath && envs.length > 0) this.pythonSupplier.selectedEnvPath = envs[0].path
 
-        this._view.webview.postMessage({
-            command: 'refreshPython',
-            data: envs,
-            selectedEnv: this.pythonSupplier.selectedEnvPath
-        });
+        this.updatePython()
     }
+
 
 
     private _getHtmlForWebview(webview: vscode.Webview): string {
         // Convert local file paths into Webview URIs
         const cssUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'media', 'webviewParsing', 'styles.css')
+            vscode.Uri.joinPath(this.context.extensionUri, 'media', 'webviewParsing', 'styles.css')
         );
         let jsUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'media', 'webviewParsing', 'config.js')
+            vscode.Uri.joinPath(this.context.extensionUri, 'media', 'webviewParsing', 'config.js')
         );
 
         // Read HTML template from disk
-        const htmlPath = path.join(this._extensionUri.fsPath, 'media', 'webviewParsing', 'index.html');
+        const htmlPath = path.join(this.context.extensionUri.fsPath, 'media', 'webviewParsing', 'index.html');
         let htmlContent = fs.readFileSync(htmlPath, 'utf8');
 
         // Replace placeholders with real URIs
@@ -207,6 +232,7 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
                 this.pathObjects.push(newPathObj)
 
                 this.updatePaths()
+                this.savePaths()
             }
         )
     }
@@ -232,6 +258,7 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
                 }
             }
             this.updatePaths()
+            this.savePaths()
         }
     }
     async changePathTypeCommand(arg: any) {
@@ -254,6 +281,12 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
 
 
             this.updatePaths()
+
+            this.savePaths()
         }
+    }
+
+    async savePaths(){
+        this.context.globalState.update('sql-nav-link-' + vscode.workspace.name + 'paths', this.pathObjects);
     }
 }

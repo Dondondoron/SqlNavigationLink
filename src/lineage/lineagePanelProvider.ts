@@ -53,10 +53,13 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
                     if (this.currentUri) this.openedSqlFile(this.currentUri)
                     break;
             }
-
-
-
         });
+
+        webviewView.onDidChangeVisibility(()=>{
+            if(webviewView.visible && this.currentUri){
+                this.openedSqlFile(this.currentUri)
+            }
+        })
 
         webviewView.webview.options = {
             enableScripts: true,

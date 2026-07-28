@@ -1,7 +1,6 @@
 
 
 import * as vscode from "vscode";
-import * as path from "path";
 
 import { PathObject, SqlType } from "./pathClasses";
 import { SqlModelProvider } from "./modelProvider";
@@ -23,8 +22,11 @@ export class MainController {
 
     constructor(context: vscode.ExtensionContext) {
 
+        
 
-        const defaultPaths: PathObject[] = (vscode.workspace.workspaceFolders ?? []).map(folder => {
+        const savedPaths = context.globalState.get<PathObject[]>('sql-nav-link-' + vscode.workspace.name + 'paths')
+
+        const defaultPaths: PathObject[] = savedPaths ?? (vscode.workspace.workspaceFolders ?? []).map(folder => {
             folder.uri.fsPath
 
             const label = folder.uri.fsPath.split('/').pop()
@@ -40,7 +42,7 @@ export class MainController {
         
         this.sqlModelProvider = new SqlModelProvider()
         this.lineagePanelProvider = new LineagePanelProvider(context.extensionUri, this.sqlModelProvider)
-        this.parseView = new ParseViewProvider(this.pythonSupplier, context.extensionUri, defaultPaths)
+        this.parseView = new ParseViewProvider(this.pythonSupplier, context, defaultPaths)
 
 
     }

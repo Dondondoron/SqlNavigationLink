@@ -23,10 +23,7 @@ function generateId() {
     return Math.random().toString(36).substring(2, 9);
 }
 
-
-
 eventListener = (e) => {
-
 
     const actionButton = e.target.closest('button[data-action]');
 
@@ -45,6 +42,9 @@ eventListener = (e) => {
         }
         else if (action === 'changePathType') {
             post(action, actionButton.dataset.value);
+        }
+        else{
+            post(action)
         }
 
         return;
@@ -165,23 +165,38 @@ function createPythonEnvCard(pyenv) {
     card.appendChild(cardHeader);
 
     // 2. Packages Section (Collapsible)
-    if (pyenv.packages && pyenv.packages.length > 0) {
+    if ((pyenv.packages && pyenv.packages.length > 0) || pyenv.missingPackages && pyenv.missingPackages.length > 0) {
         const pkgSection = document.createElement('details');
         pkgSection.className = 'py-pkg-section';
 
+        const isMissingPackages = pyenv.missingPackages?.length??0 === 0 ? true : false
+
         const summary = document.createElement('summary');
+        if(isMissingPackages) summary.className = 'missing'
         summary.textContent = `Packages (${pyenv.packages.length})`;
         pkgSection.appendChild(summary);
+
+        const pkgListMissing = document.createElement('ul');
+        pkgListMissing.className = 'py-pkg-list missing';
+        
+        pyenv.missingPackages?.forEach(p => {
+            const li = document.createElement('li');
+            li.innerHTML = `<span class="pkg-name">${escapeHtml(p.name)}</span> <span class="pkg-version">v${escapeHtml(p.version)}</span>`;
+            pkgListMissing.appendChild(li);
+        });
+
 
         const pkgList = document.createElement('ul');
         pkgList.className = 'py-pkg-list';
 
-        pyenv.packages.forEach(p => {
+        pyenv.packages?.forEach(p => {
             const li = document.createElement('li');
+            if(p.relevant) li.className = 'relevant'
             li.innerHTML = `<span class="pkg-name">${escapeHtml(p.name)}</span> <span class="pkg-version">v${escapeHtml(p.version)}</span>`;
             pkgList.appendChild(li);
         });
 
+        if(isMissingPackages)pkgSection.appendChild(pkgListMissing);
         pkgSection.appendChild(pkgList);
         card.appendChild(pkgSection);
     }

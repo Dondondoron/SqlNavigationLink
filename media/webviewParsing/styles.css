@@ -179,7 +179,7 @@ PYTHON CONTAINER
     gap: 12px;
 }
 
-.py-card.selected{
+.py-card.selected {
     border: 2px solid var(--vscode-focusBorder, #6765cf);
 }
 
@@ -233,6 +233,10 @@ PYTHON CONTAINER
     margin-bottom: 6px;
 }
 
+.py-pkg-section summary.missing {
+    color: var(--vscode-errorForeground);
+}
+
 .py-pkg-list {
     list-style: none;
     padding: 0;
@@ -253,6 +257,15 @@ PYTHON CONTAINER
 
 .py-pkg-list li:last-child {
     border-bottom: none;
+}
+
+
+.py-pkg-list.missing li {
+    color: var(--vscode-errorForeground);
+}
+
+.py-pkg-list li.relevant {
+    color: var(--vscode-testing-iconPassed); /* Or var(--vscode-gitDecoration-addedResourceForeground) */
 }
 
 .pkg-name {

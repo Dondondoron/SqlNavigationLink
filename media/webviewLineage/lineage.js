@@ -43,13 +43,13 @@ function createCard(data, isCenter = false, direction = 'left') {
 
         cardHeader.appendChild(fieldButton)
 
-        fieldsContainer = document.createElement('ul') 
+        fieldsContainer = document.createElement('ul')
         fieldsContainer.id = id
         fieldsContainer.style.display = 'none'
         fieldsContainer.className = 'fields-container'
 
         for (const field of data.fields) {
-            const fieldItem = document.createElement('li') 
+            const fieldItem = document.createElement('li')
             fieldItem.className = 'field-item'
             fieldItem.textContent = field
             fieldsContainer.appendChild(fieldItem)
@@ -180,3 +180,7 @@ function renderLineage(data) {
         rightContainer.innerHTML = '<div class="empty-state">None</div>';
     }
 }
+
+
+document.removeEventListener('click', eventListener)
+document.addEventListener('click', eventListener)

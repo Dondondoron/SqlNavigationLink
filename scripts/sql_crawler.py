@@ -1,8 +1,7 @@
-import os
 from pathlib import Path
 from typing import List
 
-from sqlmesh.core.context import Context
+
 
 from sqlglot import  parse
 from sqlglot.errors import ParseError
@@ -10,7 +9,6 @@ from sqlglot.errors import ParseError
 
 import re
 import warnings
-import yaml
 
 
 from jinja2 import Environment, Undefined
@@ -19,15 +17,34 @@ warnings.filterwarnings("ignore")
 
 
 
+def crawl_for_dbt_config_file(paths: List[str]):
+    files = []
+    for path in paths:
+        files.append(crawl_folder_for_dbt_config(path))
+    return files
+
+def crawl_folder_for_dbt_config(path: str):
+    root_path = Path(path)
+    found_files = [str(file.resolve()) for file in root_path.rglob('dbt_project.yml')]
+    return found_files
+
 def extract_dbt_variables(project_dir: str) -> dict:
     """
     Reads a dbt_project.yml file and extracts all configured variables.
     """
     project_path = Path(project_dir) / "dbt_project.yml"
-    
+    import yaml
+
     if not project_path.exists():
-        print(f"⚠️ dbt_project.yml not found at: {project_path}")
-        return {}
+        print(f"⚠️ dbt_project.yml not found at: {project_path}, crawling")
+
+        found_configs = crawl_folder_for_dbt_config(project_dir)
+
+        if len(found_configs) == 0:
+            print(f"🛑 dbt_project.yml not found with crawling")
+            return {}
+
+        project_path = Path(found_configs[0])
         
     try:
         with open(project_path, "r", encoding="utf-8") as file:
@@ -102,6 +119,7 @@ class SqlCrawler:
         self.sql_type = sql_type
 
         if sql_type == 'DBT':
+            
             extracted_vars = extract_dbt_variables(path)
     
             self.env.globals = CatchAllGlobals({
@@ -111,7 +129,8 @@ class SqlCrawler:
             })
 
             self.env.undefined = CatchAllUndefined
-
+        elif sql_type == 'SQLMESH':
+            from sqlmesh.core.context import Context
 
     def parse_files(self, paths: List[str]):
             parsed_trees = {}

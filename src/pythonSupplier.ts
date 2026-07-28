@@ -3,12 +3,14 @@ import * as path from "path";
 import * as childProcess from 'child_process';
 import { promisify } from 'util';
 import { logError } from "./logging";
+import { Config } from "./Settings";
 
 const exec = promisify(childProcess.exec);
 
 export interface PythonPackage {
     name: string;
     version: string;
+    relevant?: boolean;
 }
 
 enum PythonSource {
@@ -22,7 +24,8 @@ export class PythonEnvironment {
     public readonly pythonExecutable: string;
     public readonly source: PythonSource
 
-    public packages: { name: string; version: string }[] = []
+    public packages: PythonPackage[] = []
+    public missingPackages: PythonPackage[] = []
 
     constructor(venvName: string, envPath: string, pythonExecutable: string, source: PythonSource) {
         this.venvName = venvName;
@@ -131,9 +134,26 @@ export class PythonEnvironment {
             // Using `python -m pip list --format=json` gets structured output directly
             const { stdout } = await exec(`"${this.pythonExecutable}" -m pip list --format=json`);
 
-            const packages: { name: string; version: string }[] = JSON.parse(stdout);
+            const packages: PythonPackage[] = JSON.parse(stdout);
+
             this.packages = packages
-            return packages;
+                .map(p => {
+                    const isRelevant = Boolean(Config.requirements[p.name]);
+                    return {
+                        ...p,
+                        relevant: isRelevant
+                    };
+                })
+                .sort((a, b) => Number(b.relevant) - Number(a.relevant));
+
+            this.missingPackages = Object.entries(Config.requirements)
+                .filter(([packageName]) => !this.packages.some(p => p.name === packageName))
+                .map(([packageName, versionMap]) => ({
+                    name: packageName,
+                    version: versionMap.defaultVersion
+                } as PythonPackage));
+
+            return this.packages;
         } catch (error) {
             logError(`Failed to retrieve packages for ${this.path}:`, error)
             return [];
@@ -157,7 +177,7 @@ export class PythonSupplier {
         })
 
 
-        if(this.pythonVenvs.length>0) this.selectedEnvPath = this.pythonVenvs[0].path
+        if (this.pythonVenvs.length > 0) this.selectedEnvPath = this.pythonVenvs[0].path
     }
 
 
@@ -177,7 +197,29 @@ export class PythonSupplier {
             if (pythonEnv) this.pythonVenvs.push(pythonEnv)
             else logError(`Could not find executable from sql-nav-link Settings with path: ${pythonPath}`)
         }
+    }
 
+    async setNewConfigPythonEnv() {
+        const fileUris = await vscode.window.showOpenDialog({
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: false,
+            openLabel: 'Select Path'
+        });
+
+        if (!fileUris || fileUris.length === 0) {
+            return;
+        }
+
+        const selectedUri = fileUris[0];
+
+        const config = vscode.workspace.getConfiguration('Dondondoron.sql-nav-link');
+
+        await config.update(
+            'pythonPath',
+            selectedUri.fsPath,
+            vscode.ConfigurationTarget.Global
+        );
     }
 
 
