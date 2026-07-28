@@ -6,7 +6,6 @@ import * as fs from 'fs';
 
 import { execFile } from "child_process";
 
-import { Config } from "./Settings";
 import { logError, logInformation } from "./logging";
 
 
@@ -15,8 +14,8 @@ export interface TableInfo {
     name: string;
     db?: string;
     catalog?: string;
-    alias?:string;
-    fields:string[]
+    alias?: string;
+    fields: string[]
 }
 
 export class SqlModelInfo extends vscode.TreeItem {
@@ -24,15 +23,16 @@ export class SqlModelInfo extends vscode.TreeItem {
         public name: string,
         public file_name: string,
         public file_path: string,
-        public table_names: TableInfo[]
-    ){
+        public table_names: TableInfo[],
+        public cte_names: TableInfo[]
+    ) {
         super(name, vscode.TreeItemCollapsibleState.Collapsed)
 
         this.command = {
-                command: `sql-nav-link.openPath`,
-                title: name,
-                arguments: [file_path]
-            }
+            command: `sql-nav-link.openPath`,
+            title: name,
+            arguments: [file_path]
+        }
     }
 }
 
@@ -79,7 +79,14 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
 
     initModels(models: SqlModelsResponse) {
 
-        this.models = new Map(Object.entries(models).map(m=> [vscode.Uri.file(m[0]).fsPath, new SqlModelInfo(m[1].name, m[1].file_name, m[1].file_path, m[1].table_names)]))
+        this.models = new Map(Object.entries(models).map(m =>
+            [vscode.Uri.file(m[0]).fsPath,
+            new SqlModelInfo(
+                m[1].name,
+                m[1].file_name,
+                m[1].file_path,
+                m[1].table_names,
+                m[1].cte_names)]))
 
         this._onDidChangeTreeData.fire()
     }
@@ -119,7 +126,7 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
 
                     // 3. Read the output directly from the file
                     fs.readFile(tempFilePath, 'utf-8', (readErr, rawData) => {
-                        cleanup(); 
+                        cleanup();
 
                         if (readErr) {
                             logError(`SQL Scanner Error: Could not read temporary output file.`)
@@ -129,7 +136,7 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
                         try {
                             const models: SqlModelsResponse = JSON.parse(rawData);
 
-                            
+
                             logInformation(
                                 "Successfully parsed " + Object.keys(models).length + " SQL files"
                             );
@@ -177,9 +184,76 @@ class ModelProvideDefinition implements vscode.DefinitionProvider {
 
 
         if (refModels.length === 0) {
-            const quoteModel = this.modelProvider.models.get(tableName)
-            Array.from(this.modelProvider.models.values()).filter((m) => m.table_names.some((dp) => dp.fullname === tableName)).forEach(p => refModels.push(p))
-            if (quoteModel) refModels.push(quoteModel)
+            const docModel = this.modelProvider.models.get(document.uri.fsPath)
+
+            if (docModel) {
+                const cte = docModel?.cte_names.find(cte => cte.fullname === tableName || cte.alias === tableName)
+                if (cte) {
+
+                    const content = document.getText()
+                    const matches = content.matchAll(RegExp(tableName, 'g'))
+
+                    const references = Array.from(matches).map(match => {
+                        if (match && typeof match.index !== 'undefined') {
+                            const targetPos = document.positionAt(match.index);
+                            if (targetPos.line !== position.line)
+                                return new vscode.Location(document.uri, targetPos);
+                        }
+
+                    }).filter(f => f !== undefined)
+                    return references
+                }
+
+                const tableAlias = tableName.split('.')[0]
+                const splitField = tableName.split('.')[1]
+
+                const field = [...docModel.table_names.flatMap(t => t.fields), ...docModel.cte_names.flatMap(t => t.fields)]
+                    .find(f => f === tableName || f === splitField)
+
+                if (field) {
+                    const content = document.getText()
+                    const matches = content.matchAll(RegExp(field, 'g'))
+
+                    const references = Array.from(matches).map(match => {
+                        if (match && typeof match.index !== 'undefined') {
+                            const targetPos = document.positionAt(match.index);
+                            return new vscode.Location(document.uri, targetPos);
+                        }
+
+                    }).filter(f => f !== undefined)
+
+                    const refTable = [...docModel.table_names].find(t => t.alias === tableAlias)
+
+                    if (refTable) {
+
+                        const refFieldModel = Array.from(this.modelProvider.models.values()).filter(m => m.name === refTable.fullname)
+
+                        const fieldRefLocationPromises = refFieldModel.map(async (rm) => {
+                            const file = vscode.Uri.file(rm.file_path);
+                            const doc = await vscode.workspace.openTextDocument(file);
+                            const content = doc.getText();
+                            const match = content.match(splitField);
+
+                            if (match && typeof match.index !== 'undefined' && doc.fileName !== document.fileName) {
+                                const targetPos = doc.positionAt(match.index);
+                                return new vscode.Location(file, targetPos);
+                            }
+
+                            return new vscode.Location(file, doc.positionAt(0));
+                        })
+
+                        const resolvedLocations = await Promise.all(fieldRefLocationPromises);
+
+                        references.push(...resolvedLocations)
+
+                    }
+
+                    return references
+
+                }
+
+
+            }
         }
 
 
