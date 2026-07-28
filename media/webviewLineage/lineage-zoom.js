@@ -16,8 +16,64 @@ let targetScale = 1
 let timestamp = Date.now()
 
 
+let isPanning = false;
+let panStartX = 0;
+let panStartY = 0;
+let panActualStartX = 0;
+let panActualStartY = 0;
+
+
 const canvasArea = document.getElementById('canvas-area')
 const canvas = document.getElementById('lineage-container')
+
+function handleMouseDown(e) {
+
+    isPanning = true;
+    panStartX = e.clientX;
+    panStartY = e.clientY;
+    panActualStartX = e.clientX;
+    panActualStartY = e.clientY;
+    canvas.style.cursor = "grabbing";
+
+}
+
+function handleMouseMove(e) {
+    if (isPanning) {
+        if (isAnimating) isAnimating = false;
+
+        const dx = e.clientX - panStartX;
+        const dy = e.clientY - panStartY;
+
+        translateX += dx;
+        translateY += dy;
+        targetTranslateX = translateX;
+        targetTranslateY = translateY;
+
+        panStartX = e.clientX;
+        panStartY = e.clientY;
+
+        updateTransform();
+    }
+}
+
+
+function handleMouseUp(e) {
+
+    if (isPanning) {
+        isPanning = false;
+        canvas.style.cursor = "default";
+
+        const dx = e.clientX - panActualStartX;
+        const dy = e.clientY - panActualStartY;
+
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const threshold = 10;
+
+        if (distance > threshold) {
+            return;
+        }
+    }
+}
 
 function handleWheel(e) {
 
@@ -123,3 +179,15 @@ function update(scale, tx, ty) {
 window.addEventListener('wheel', (e) => {
     handleWheel(e)
 }, { passive: false });
+
+window.addEventListener('mousedown', (e) => {
+    handleMouseDown(e)
+});
+
+window.addEventListener('mousemove', (e) => {
+    handleMouseMove(e)
+});
+
+window.addEventListener('mouseup', (e) => {
+    handleMouseUp(e)
+});
