@@ -186,27 +186,6 @@ const MIN_SCALE = 0.3;
 const MAX_SCALE = 3.0;
 const ZOOM_SPEED = 0.1;
 
-window.addEventListener('wheel', (e) => {
-    // Detect Ctrl key (or Cmd key on Mac)
-    if (e.ctrlKey || e.metaKey) {
-        // Prevent default browser/editor scroll zoom
-        e.preventDefault();
-
-        // Adjust scale based on scroll direction
-        if (e.deltaY < 0) {
-            currentScale = Math.min(MAX_SCALE, currentScale + ZOOM_SPEED);
-        } else {
-            currentScale = Math.max(MIN_SCALE, currentScale - ZOOM_SPEED);
-        }
-
-        // Apply scale transform to your main layout container
-        // Replace '#lineage-container' with your top-level layout element's ID or selector
-        const container = document.getElementById('lineage-container') || document.body;
-        
-        container.style.transform = `scale(${currentScale})`;
-        container.style.transformOrigin = '0 0'; // Keeps scaling anchored predictably
-    }
-}, { passive: false });
 
 document.removeEventListener('click', eventListener)
 document.addEventListener('click', eventListener)

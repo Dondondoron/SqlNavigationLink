@@ -1,24 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <link rel="stylesheet" href="{{cssUri}}">
 </head>
+
 <body>
-  <div id="lineage-container" class="lineage-container">
-    <div class="column" id="left-col">
-      <div class="col-title">Upstream (Refs)</div>
-      <div class="nodes" id="left-nodes"></div>
-    </div>
+  <div id="canvas-area">
+    <div id="lineage-container" class="lineage-container">
+      <div class="column" id="left-col">
+        <div class="col-title">Upstream (Refs)</div>
+        <div class="nodes" id="left-nodes"></div>
+      </div>
 
-    <div class="column" id="center-col">
-      <div class="col-title">Current Model</div>
-      <div class="nodes" id="center-nodes"></div>
-    </div>
+      <div class="column" id="center-col">
+        <div class="col-title">Current Model</div>
+        <div class="nodes" id="center-nodes"></div>
+      </div>
 
-    <div class="column" id="right-col">
-      <div class="col-title">Downstream (Referenced By)</div>
-      <div class="nodes" id="right-nodes"></div>
+      <div class="column" id="right-col">
+        <div class="col-title">Downstream (Referenced By)</div>
+        <div class="nodes" id="right-nodes"></div>
+      </div>
     </div>
   </div>
 
@@ -35,5 +39,7 @@
   </div>
 
   <script src="{{jsUri}}"></script>
+  <script src="{{jsUri2}}"></script>
 </body>
+
 </html>
