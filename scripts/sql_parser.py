@@ -45,7 +45,7 @@ def parseCTELess(model_name:str, filename:str, file_path:str, query: exp.Select)
     uncte_query.set("with_", None)
     tables = parseSelect(uncte_query)
     ctes : set[TableInfo] = set()
-    cte_names = {cte.alias_or_name.lower() for cte in query.ctes}
+    cte_names = {cte.alias_or_name.lower() for cte in query.ctes} if hasattr(query, 'ctes') else []
     for cte in query.find_all(exp.CTE):
         cte_tables = parseSelect(cte)
         tables |= cte_tables  # Or: tables.update(cte_tables)
