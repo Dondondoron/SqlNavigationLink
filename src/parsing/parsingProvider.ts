@@ -26,27 +26,10 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
             this.pathObjects = initialPaths;
         }
 
-        this.init()
+        
 
     }
 
-    private async init(){
-
-
-
-        await this.pythonSupplier.init()
-
-        const autoLoadContext = vscode.workspace
-            .getConfiguration('Dondondoron.sql-nav-link')
-            .get('autoContext', false);
-
-
-        if (autoLoadContext) {
-            this.refreshAutoContext()
-            vscode.commands.executeCommand('sql-nav-link.parsePaths')
-        }
-
-    }
 
     public async resolveWebviewView(webviewView: vscode.WebviewView) {
         this._view = webviewView;

@@ -55,8 +55,8 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
             }
         });
 
-        webviewView.onDidChangeVisibility(()=>{
-            if(webviewView.visible && this.currentUri){
+        webviewView.onDidChangeVisibility(() => {
+            if (webviewView.visible && this.currentUri) {
                 this.openedSqlFile(this.currentUri)
             }
         })
@@ -67,10 +67,12 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
         };
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+    }
 
+    public init() {
+    
         const openDocument = vscode.window.activeTextEditor?.document
-
-        if(openDocument)this.openedSqlFile(openDocument.uri)
+        if (openDocument) this.openedSqlFile(openDocument.uri)
     }
 
 
@@ -168,7 +170,7 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
     private _getHtmlForWebview(webview: vscode.Webview): string {
         // Convert local file paths into Webview URIs
         const cssUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'media', 'webviewLineage','lineage.css')
+            vscode.Uri.joinPath(this._extensionUri, 'media', 'webviewLineage', 'lineage.css')
         );
         const jsUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this._extensionUri, 'media', 'webviewLineage', 'lineage.js')

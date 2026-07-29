@@ -13,16 +13,17 @@ import { logError } from "./logging";
 export class MainController {
     commandParseController!: vscode.Disposable;
 
-    sqlModelProvider: SqlModelProvider;
-    parseView: ParseViewProvider
-    lineagePanelProvider: LineagePanelProvider
+    sqlModelProvider!: SqlModelProvider;
+    parseView!: ParseViewProvider
+    lineagePanelProvider!: LineagePanelProvider
 
-    pythonSupplier: PythonSupplier
+    pythonSupplier!: PythonSupplier
 
 
     constructor(context: vscode.ExtensionContext) {
-
-        
+        this.init(context)
+    }
+    private async init(context: vscode.ExtensionContext) {
 
         const savedPaths = context.globalState.get<PathObject[]>('sql-nav-link-' + vscode.workspace.name + 'paths')
 
@@ -38,12 +39,26 @@ export class MainController {
             };
         })
 
-        this.pythonSupplier = new PythonSupplier(context)
         
-        this.sqlModelProvider = new SqlModelProvider()
-        this.lineagePanelProvider = new LineagePanelProvider(context.extensionUri, this.sqlModelProvider)
-        this.parseView = new ParseViewProvider(this.pythonSupplier, context, defaultPaths)
+        const autoLoadContext = vscode.workspace
+            .getConfiguration('Dondondoron.sql-nav-link')
+            .get('autoContext', false);
 
+
+        this.pythonSupplier = new PythonSupplier(context)
+
+        this.sqlModelProvider = new SqlModelProvider()
+        this.parseView = new ParseViewProvider(this.pythonSupplier, context, defaultPaths)
+        this.lineagePanelProvider = new LineagePanelProvider(context.extensionUri, this.sqlModelProvider)
+        await this.pythonSupplier.init()
+
+
+        if (autoLoadContext) {
+            this.parseView.refreshAutoContext()
+            await this.parse(context)
+        }
+
+        this.lineagePanelProvider.init()
 
     }
 
@@ -122,24 +137,26 @@ export class MainController {
         return vscode.commands.registerCommand(
             'sql-nav-link.parsePaths',
             async () => {
-
-                const pathArguments: any[] = []
-
-                this.parseView.pathObjects.forEach(m => pathArguments.push(m.filePath, m.type))
-
-                const pythonEnv = this.pythonSupplier.getCurrenPythonEnv()
-
-                if(!pythonEnv){
-                    logError('Unable to find python environment executable for parsing')
-                    return
-                }
-
-                const models = await this.sqlModelProvider.getPythonParsePromise(pythonEnv.pythonExecutable, pathArguments, context);
-
-                if (models) this.sqlModelProvider.initModels(models);
-
+                this.parse(context)
             }
         )
+    }
+
+    private async parse(context: vscode.ExtensionContext) {
+        const pathArguments: any[] = []
+
+        this.parseView.pathObjects.forEach(m => pathArguments.push(m.filePath, m.type))
+
+        const pythonEnv = this.pythonSupplier.getCurrenPythonEnv()
+
+        if (!pythonEnv) {
+            logError('Unable to find python environment executable for parsing')
+            return
+        }
+
+        const models = await this.sqlModelProvider.getPythonParsePromise(pythonEnv.pythonExecutable, pathArguments, context);
+
+        if (models) this.sqlModelProvider.initModels(models);
     }
 
     updatePythonEnvironmentCommand() {
