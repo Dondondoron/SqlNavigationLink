@@ -26,6 +26,26 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
             this.pathObjects = initialPaths;
         }
 
+        this.init()
+
+    }
+
+    private async init(){
+
+
+
+        await this.pythonSupplier.init()
+
+        const autoLoadContext = vscode.workspace
+            .getConfiguration('Dondondoron.sql-nav-link')
+            .get('autoContext', false);
+
+
+        if (autoLoadContext) {
+            this.refreshAutoContext()
+            vscode.commands.executeCommand('sql-nav-link.parsePaths')
+        }
+
     }
 
     public async resolveWebviewView(webviewView: vscode.WebviewView) {
@@ -68,9 +88,6 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
                     );
                     break;
             }
-
-
-
         });
 
         webviewView.onDidChangeVisibility((e) => {
@@ -91,19 +108,11 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
+        
         this.updatePaths()
+        this.updatePython()
+        this.refreshAutoContext()
 
-        await this.pythonSupplier.init()
-
-        const autoLoadContext = vscode.workspace
-            .getConfiguration('Dondondoron.sql-nav-link')
-            .get('autoContext', false);
-
-
-        if (autoLoadContext) {
-            this.refreshAutoContext()
-            vscode.commands.executeCommand('sql-nav-link.parsePaths')
-        }
     }
 
     refreshAutoContext() {

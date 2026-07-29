@@ -67,6 +67,10 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
         };
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+
+        const openDocument = vscode.window.activeTextEditor?.document
+
+        if(openDocument)this.openedSqlFile(openDocument.uri)
     }
 
 
