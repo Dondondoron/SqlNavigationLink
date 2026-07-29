@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as childProcess from 'child_process';
 import { promisify } from 'util';
-import { logError } from "./logging";
+import { logError, logInformation } from "./logging";
 import { Config } from "./Settings";
 
 const exec = promisify(childProcess.exec);
@@ -32,6 +32,30 @@ export class PythonEnvironment {
         this.path = envPath;
         this.pythonExecutable = pythonExecutable;
         this.source = source
+    }
+
+    toJSON(){
+        return {
+            venvName: this.venvName,
+            path: this.path,
+            pythonExecutable: this.pythonExecutable,
+            source: this.source,
+            packages:this.packages,
+            missingPackages:this.missingPackages,
+        }
+    }
+
+    static fromJSON(data:any){
+        const pythonEnv = new PythonEnvironment(
+            data.venvName,
+            data.path,
+            data.pythonExecutable,
+            data.source
+        )
+        pythonEnv.packages = data.packages
+        pythonEnv.missingPackages = data.missingPackages
+        
+        return pythonEnv
     }
 
     /**
@@ -162,27 +186,63 @@ export class PythonEnvironment {
 }
 export class PythonSupplier {
 
+    getEnvsConfigName() {
+        return 'sql-nav-link-' + vscode.workspace.name + '-py-envs'
+    }
+
+    getCurrentEnvConfigName() {
+        return 'sql-nav-link-' + vscode.workspace.name + '-current-py-env'
+    }
+
     pythonVenvs: PythonEnvironment[] = []
 
     selectedEnvPath?: string
 
-    constructor(private context: vscode.ExtensionContext) {
-
-    }
+    constructor(
+        private context: vscode.ExtensionContext
+    ) { }
 
     async init() {
 
-        await Promise.all([this.getConfigEnv(), this.loadPyExtension()]).then(() => {
-            vscode.commands.executeCommand('sql-nav-link.pythonRefresh')
-        })
+        const savedCurrentEnv = this.context.globalState.get<string>(this.getCurrentEnvConfigName())
+        const savedEnvs = this.context.globalState.get<any[]>(this.getEnvsConfigName())?.map(d=> PythonEnvironment.fromJSON(d))
+        
 
+        if (!savedEnvs)
+            await Promise.all([this.getConfigEnv(), this.loadPyExtension()]).then(() => {
+                vscode.commands.executeCommand('sql-nav-link.pythonRefresh')
+            })
+        else this.pythonVenvs = savedEnvs
 
-        if (this.pythonVenvs.length > 0) this.selectedEnvPath = this.pythonVenvs[0].path
+        if (savedCurrentEnv) this.selectedEnvPath = savedCurrentEnv
+        else if (this.pythonVenvs.length > 0) this.setCurrentPythonEnv(this.pythonVenvs[0].path)
     }
 
 
+    saveLocalPythonEnvs() {
+        this.context.globalState.update(this.getEnvsConfigName(), this.pythonVenvs.map(p=>p.toJSON()))
+    }
+
+
+    setCurrentPythonEnv(env: string) {
+        this.selectedEnvPath = env
+        this.context.globalState.update(this.getCurrentEnvConfigName(), env)
+    }
+
     getCurrenPythonEnv() {
         return this.pythonVenvs.find(f => f.path === this.selectedEnvPath)
+    }
+
+    async refreshPython() {
+        logInformation('Getting available python packages')
+
+        await Promise.all([...this.pythonVenvs.map(e => e.getPackages())])
+
+        const envs = this.pythonVenvs
+
+        if (!this.selectedEnvPath && envs.length > 0) this.selectedEnvPath = envs[0].path
+
+        this.saveLocalPythonEnvs()
     }
 
     async getConfigEnv() {

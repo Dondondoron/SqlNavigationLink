@@ -26,7 +26,7 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
             this.pathObjects = initialPaths;
         }
 
-        
+
 
     }
 
@@ -51,7 +51,7 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
                     await this.changePathTypeCommand(data.args[0])
                     break;
                 case "changeSelectedEnv":
-                    this.pythonSupplier.selectedEnvPath = data.args[0]
+                    this.pythonSupplier.setCurrentPythonEnv(data.args[0])
                     break;
                 case "selectPythonEnv":
                     await this.pythonSupplier.setNewConfigPythonEnv()
@@ -91,7 +91,7 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-        
+
         this.updatePaths()
         this.updatePython()
         this.refreshAutoContext()
@@ -137,15 +137,7 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
         if (!this._view) {
             return;
         }
-
-        logInformation('Getting available python packages')
-
-        await Promise.all([...this.pythonSupplier.pythonVenvs.map(e => e.getPackages())])
-
-        const envs = this.pythonSupplier.pythonVenvs
-
-        if (!this.pythonSupplier.selectedEnvPath && envs.length > 0) this.pythonSupplier.selectedEnvPath = envs[0].path
-
+        await this.pythonSupplier.refreshPython()
         this.updatePython()
     }
 
@@ -278,7 +270,7 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    async savePaths(){
+    async savePaths() {
         this.context.globalState.update('sql-nav-link-' + vscode.workspace.name + 'paths', this.pathObjects);
     }
 }
