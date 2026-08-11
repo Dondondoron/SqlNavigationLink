@@ -28,14 +28,14 @@ if __name__ == '__main__':
 
         crawler = SqlCrawler(path, sql_type)
 
-        raw_folders = crawler.crawl_folders([path])
+        raw_folders, config_files = crawler.crawl_folders([path])
 
         folders = list(itertools.chain.from_iterable(
             sublist if isinstance(sublist, list) else [sublist] 
             for sublist in raw_folders
         ))
 
-        parsed_queries = crawler.parse_files(folders)
+        parsed_queries = crawler.parse_files(folders, config_files)
         sql_models = parse_sql_models_and_extract_tables(parsed_queries)
 
         all_models.update(sql_models)

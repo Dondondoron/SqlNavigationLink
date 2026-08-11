@@ -14,22 +14,22 @@ class SqlCrawler:
                     self.dbt_parser = DBTParser(path)
 
 
-    def parse_files(self, paths: List[str]):
+    def parse_files(self, paths: List[str], config_files: List[str]):
             if self.sql_type == 'DBT':
                  return self.dbt_parser.parse_files(paths)
             elif self.sql_type == 'SQLMESH':
                  from sqlmesh_parse import parse_sqlmesh
-                 return parse_sqlmesh(paths)
+                 return parse_sqlmesh(paths, config_files)
             return {}
 
 
     def crawl_folders(self, paths: List[str]):
-        files = []
+        sql_files = [self.crawl_folder(path) for path in paths]
         if self.sql_type == 'SQLMESH':
-             return self.find_sqlmesh_config_directories(self.path)
-        for path in paths:
-            files.append(self.crawl_folder(path))
-        return files
+             config_files = self.find_sqlmesh_config_directories(self.path)
+             return [sql_files, config_files]
+          
+        return [sql_files, []]
     
     def crawl_folder(self, path: str):
         root_path = Path(path)
