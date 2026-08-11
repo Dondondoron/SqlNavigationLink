@@ -94,7 +94,7 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
 
         function loopModelToRefLeftSide(model: SqlModelInfo, maxLoops: number, currentDepth: number = 2): ModelLineage[] {
             return model.table_names.map(l => {
-                const out = arrayedModels.find(m => m.name === l.fullname) ?? l;
+                const out = arrayedModels.find(m => m.name === l.fullname.replaceAll('"', '')) ?? l;
                 const isSqlModel = out instanceof SqlModelInfo;
 
                 // Only recurse deeper if we haven't hit maxLoops yet
@@ -111,7 +111,7 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
 
         const leftRefs = (model.table_names || []).map(t => t)
             .map(ti => {
-                const nextModel = arrayedModels.find(m => m.name === ti.fullname) ?? ti
+                const nextModel = arrayedModels.find(m => m.name === ti.fullname.replaceAll('"', '')) ?? ti
                 return {
                     model: nextModel,
                     refs: nextModel instanceof SqlModelInfo && this.currentLeftDepth > 1 ? loopModelToRefLeftSide(nextModel, this.currentLeftDepth) : [],
@@ -125,12 +125,12 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
         function loopModelToRefRightSide(currentModel: SqlModelInfo, maxLoops: number, currentDepth: number = 2): ModelLineage[] {
             // Find all models that depend on currentModel
             const downstreamModels = arrayedModels.filter(m =>
-                m.table_names?.some(t => t.fullname === currentModel.name)
+                m.table_names?.some(t => t.fullname.replaceAll('"', '') === currentModel.name)
             );
 
             return downstreamModels.map(m => {
                 // Find matching field metadata from downstream model's table_names entry
-                const matchingTable = m.table_names?.find(t => t.fullname === currentModel.name);
+                const matchingTable = m.table_names?.find(t => t.fullname.replaceAll('"', '') === currentModel.name);
 
                 const canGoDeeper = currentDepth < maxLoops;
 
@@ -144,9 +144,9 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
 
         // Right refs invocation (Downstream dependents)
         const rightRefs = arrayedModels
-            .filter(m => m.table_names?.some(t => t.fullname === model.name))
+            .filter(m => m.table_names?.some(t => t.fullname.replaceAll('"', '') === model.name))
             .map(m => {
-                const matchingTable = m.table_names?.find(t => t.fullname === model.name);
+                const matchingTable = m.table_names?.find(t => t.fullname.replaceAll('"', '') === model.name);
                 return {
                     model: m,
                     refs: this.currentRightDepth > 1 ? loopModelToRefRightSide(m, this.currentRightDepth) : [],
@@ -154,34 +154,36 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
                 };
             });
 
-        // Post message to the client side JS inside the webview
-        this._view.webview.postMessage({
-            command: 'renderLineage',
-            data: {
+        const data = {
                 centerModel: { model: model, refs: [] },
                 leftRefs,
                 rightRefs,
                 size_left: this.currentLeftDepth.toString(),
                 size_right: this.currentRightDepth.toString()
             }
+
+        // Post message to the client side JS inside the webview
+        this._view.webview.postMessage({
+            command: 'renderLineage',
+            data: data
         });
     }
 
     private _getHtmlForWebview(webview: vscode.Webview): string {
         // Convert local file paths into Webview URIs
         const cssUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'media', 'webviewLineage', 'lineage.css')
+            vscode.Uri.joinPath(this._extensionUri, 'media', 'lineageViewer', 'index.css')
         );
         const jsUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'media', 'webviewLineage', 'lineage.js')
+            vscode.Uri.joinPath(this._extensionUri, 'media', 'lineageViewer', 'index.js')
         );
 
         const jsUriScroll = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'media', 'webviewLineage', 'lineage-zoom.js')
+            vscode.Uri.joinPath(this._extensionUri, 'media', 'lineageViewer', 'lineage-zoom.js')
         );
 
         // Read HTML template from disk
-        const htmlPath = path.join(this._extensionUri.fsPath, 'media', 'webviewLineage', 'lineage.html');
+        const htmlPath = path.join(this._extensionUri.fsPath, 'media', 'lineageViewer', 'lineage.html');
         let htmlContent = fs.readFileSync(htmlPath, 'utf8');
 
         // Replace placeholders with real URIs

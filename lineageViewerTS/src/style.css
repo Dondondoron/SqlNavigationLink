@@ -21,6 +21,7 @@ button {
     cursor: pointer;
 }
 
+
 button:hover {
     background: var(--vscode-button-hoverBackground);
     box-shadow: inset 0 6px 5px var(--vscode-focusBorder, #6765cf);
@@ -159,11 +160,13 @@ button:hover {
     position: relative;
     padding: 1px;
     color: var(--vscode-symbolIcon-propertyForeground, var(--vscode-foreground));
+    width: 100%;
+    text-align: left;
 }
 
 
-.fields-container .field-item:hover {
-    background: var(--vscode-editor-lineHighlightBackground);
+.column-item:hover {
+    box-shadow: inset 10px -10px 10px var(--vscode-focusBorder, #6765cf);
 }
 
 .empty-state {
@@ -203,4 +206,28 @@ button:hover {
     width: 32px;
     height: 32px;
     font-size: 24px;
+}
+
+
+.selected{
+    border: 1px solid var(--vscode-activityBar-activeBorder, green);
+}
+
+.hidden{
+    display: none;
+}
+
+
+.svg{
+    position: absolute;
+    left:0px;
+    top:0px;
+    overflow:visible;
+    z-index: 100;
+    user-select: none;
+    -webkit-user-select: none;
+    pointer-events: none;
+}
+.svg path{
+    stroke: var(--vscode-activityBar-activeBorder, green);
 }

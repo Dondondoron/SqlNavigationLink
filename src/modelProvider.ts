@@ -24,7 +24,9 @@ export class SqlModelInfo extends vscode.TreeItem {
         public file_name: string,
         public file_path: string,
         public table_names: TableInfo[],
-        public cte_names: TableInfo[]
+        public cte_names: TableInfo[],
+        public columns: Record<string, string[]>,
+        public cte_columns: Record<string, string[]>,
     ) {
         super(name, vscode.TreeItemCollapsibleState.Collapsed)
 
@@ -86,7 +88,10 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
                 m[1].file_name,
                 m[1].file_path,
                 m[1].table_names,
-                m[1].cte_names)]))
+                m[1].cte_names,
+                m[1].columns,
+                m[1].cte_columns
+            )]))
 
         this._onDidChangeTreeData.fire()
     }

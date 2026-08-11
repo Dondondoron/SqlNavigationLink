@@ -39,7 +39,28 @@ function createCard(data, isCenter = false, direction = 'left') {
 
     card.appendChild(cardHeader)
 
-    if (data.fields && data.fields.length > 0) {
+    if(isCenter){
+        cardHeader.appendChild(fieldButton)
+
+        fieldsContainer = document.createElement('ul')
+        fieldsContainer.id = id
+        fieldsContainer.className = 'fields-container'
+
+        debugger
+
+        for (const field of Object.entries(modelInfo.columns)) {
+            const fieldItem = document.createElement('li')
+            fieldItem.className = 'field-item column-item'
+            fieldItem.textContent = field[0]
+            fieldsContainer.appendChild(fieldItem)
+        }
+
+        card.appendChild(fieldsContainer)
+
+
+    }
+
+    if (!isCenter && data.fields && data.fields.length > 0) {
 
         cardHeader.appendChild(fieldButton)
 

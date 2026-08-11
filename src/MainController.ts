@@ -90,7 +90,8 @@ export class MainController {
                 vscode.window.showErrorMessage('No model name provided to open.');
                 return;
             }
-            const model = Array.from(this.sqlModelProvider.models).find(m => m[1].name === modelName)
+            const normalizedModelName = modelName.replaceAll('"', '')
+            const model = Array.from(this.sqlModelProvider.models).find(m => m[1].name === normalizedModelName)
             if (!model) {
                 vscode.window.showErrorMessage('No model with name ' + modelName + ' found');
                 return;
