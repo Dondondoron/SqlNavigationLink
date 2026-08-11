@@ -1,5 +1,6 @@
 
 from pathlib import Path
+from typing import List
 from sqlglot.errors import ParseError
 from sqlglot import exp
 from classes import SqlModelInfo, TableInfo
@@ -25,8 +26,6 @@ def parse_sql_models_and_extract_tables(models):
         
         if sql_statement is None:
             continue
-        if model_name == 'reddit_seven_day_trending':
-            print()
         try:
             filename = Path(model_key).name
             sql_model = parseCTELess(
@@ -40,27 +39,50 @@ def parse_sql_models_and_extract_tables(models):
             model_tables[model_key] = []
     return model_tables
 
+
+
+def parseSelectExpression(expr: exp.Expr, list_of_columns: set[str]):
+    if isinstance(expr, exp.Column):
+        list_of_columns.add(expr.sql())
+    elif isinstance(expr, exp.Expr):
+            for arg in expr.args.values():
+                if arg is not None:
+                    parseSelectExpression(arg, list_of_columns)
+    elif isinstance(expr, list):
+            for i in expr:
+                parseSelectExpression(i, list_of_columns)
+    return list_of_columns
+
 def parseCTELess(model_name:str, filename:str, file_path:str, query: exp.Select):
     uncte_query = query.copy()
     uncte_query.set("with_", None)
-    tables = parseSelect(uncte_query)
+    
+
+    [tables, columns] = parseSelect(uncte_query)
     ctes : set[TableInfo] = set()
     cte_names = {cte.alias_or_name.lower() for cte in query.ctes} if hasattr(query, 'ctes') else []
+
+    all_cte_columns = {}
+
+
     for cte in query.find_all(exp.CTE):
-        cte_tables = parseSelect(cte)
+        [cte_tables, cte_columns] = parseSelect(cte)
         tables |= cte_tables  # Or: tables.update(cte_tables)
+        all_cte_columns[cte.alias_or_name] = cte_columns
     for table in set(tables):
         ref_table_name = table.fullname
-        if ref_table_name.lower() in cte_names:
+        if ref_table_name.replace('"' , '') in cte_names:
                         ctes.add(table)
                         tables.remove(table)
-        
-    
+
     return SqlModelInfo(name=model_name,
                          file_name=filename , 
                          file_path=file_path, 
                          table_names=tables, 
-                         cte_names=ctes)
+                         cte_names=ctes,
+                         columns=columns,
+                         cte_columns=all_cte_columns
+                         )
 def parseTableFields(query:exp.Select|exp.CTE):
      alias_to_table = {}
      for table in query.find_all(exp.Table):
@@ -114,4 +136,58 @@ def parseSelect(query: exp.Select|exp.CTE):
                         fields=fields,
                     )
                 )
-            return tables
+
+            
+            columns = makeColumns(query, tables)
+
+            
+            return [tables, columns]
+
+
+def makeColumns(query: exp.Select|exp.CTE, tables: set[TableInfo]):
+    columns = {}
+    for expr in query.selects:
+        sources = parseSelectExpression(expr, set())
+
+        # Case 1: Single table query (auto-qualify with table full name)
+        if len(tables) == 1:
+            single_table = next(iter(tables))
+            table_alias = single_table.fullname
+            columns[expr.alias_or_name] = [
+                f"{table_alias}.{src.split('.')[-1]}" for src in sources
+            ]
+
+        # Case 2: Multiple tables (match source table prefix against table definitions)
+        else:
+            updated_sources = []
+            for source in sources:
+                split_parts = source.split(".")
+
+                # If qualified (e.g. "t1.col_name")
+                if len(split_parts) == 2:
+                    col_table_alias, col_name = split_parts[0], split_parts[1]
+                    clean_alias = col_table_alias.replace('"', "")
+
+                    actual_table = next(
+                        (
+                            t
+                            for t in tables
+                            if (t.alias and t.alias == clean_alias)
+                            or t.name == col_table_alias
+                            or t.fullname == col_table_alias
+                        ),
+                        None,
+                    )
+
+                    if actual_table:
+                        updated_sources.append(f"{actual_table.fullname}.{col_name}")
+                    else:
+                        print(
+                            f"⚠️ Warning: Could not find matching table for column source: {source}"
+                        )
+                        updated_sources.append(source)
+                else:
+                    updated_sources.append(source)
+
+            columns[expr.alias_or_name] = updated_sources
+    return columns

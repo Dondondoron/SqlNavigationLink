@@ -10,6 +10,9 @@ class SqlModelInfo(BaseModel):
     table_names: set
     cte_names: set
 
+    columns: Optional[dict] = None
+    cte_columns: Optional[dict] = None
+
 
 class TableInfo(BaseModel):
     model_config = ConfigDict(frozen=True)
