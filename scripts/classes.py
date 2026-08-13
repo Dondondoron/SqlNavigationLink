@@ -1,16 +1,16 @@
 
 from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from typing import Optional, List
 
 class SqlModelInfo(BaseModel):
     name: str
     file_name: str
     file_path: str
 
-    table_names: set
-    cte_names: set
+    table_names: set = set()
+    cte_names: set = set()
 
-    columns: Optional[dict] = None
+    columns: Optional[List] = []
     cte_columns: Optional[dict] = None
 
 

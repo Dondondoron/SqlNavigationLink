@@ -1,16 +1,35 @@
 
+from __future__ import annotations
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Dict, Any, Union
 from sqlglot.errors import ParseError
 from sqlglot import exp
 from classes import SqlModelInfo, TableInfo
 from collections import defaultdict
+from dataclasses import dataclass
+from pydantic import BaseModel
+import json
+
+@dataclass
+class RawModel:
+    name:str
+    path:str
+    file_name:str
+    query:exp.Query
+
+class ColRef(BaseModel):
+    name: str
+    table: str
+    refs: List["ColRef"] = []
 
 def parse_sql_models_and_extract_tables(models):
     # Dict to store tables found per model
     model_tables = {}
-    for model_key, model_value in models.items():
-        # Assuming model[1] contains the raw SQL string
+
+    raw_schema : dict[str, List[ColRef]] = {}
+
+    raw_models: List[RawModel] = []
+    for model_key, model_value in models.items():  
         model_header = model_value[0]
         model_name = ''
         sql_statement = None
@@ -18,176 +37,160 @@ def parse_sql_models_and_extract_tables(models):
             model_name = Path(model_key).name.replace('.sql', '')
             sql_statement =  model_value[0]
         elif len(model_value) > 1:
-            
+            if type(model_value[0]).__name__ == 'Audit':
+                 continue
             sql_statement =  model_value[1]
             for expr in model_header.expressions:
                 if expr.name == 'name':
                     model_name = str(expr.args['value'])
         
-        if sql_statement is None:
+        if sql_statement is None or not isinstance(sql_statement, exp.Query):
             continue
+
+        filename = Path(model_key).name
+        raw_schema[model_name] = [ColRef(name=sel, table=model_name) for sel in sql_statement.named_selects]
+        raw_models.append(RawModel(model_name, model_key, filename, sql_statement))
+         
+    for model in raw_models:
+        
         try:
-            filename = Path(model_key).name
-            sql_model = parseCTELess(
-                model_name=model_name,
-                filename=filename,
-                file_path=model_key,
-                query=sql_statement)
-            model_tables[model_key] = sql_model
+            
+            sql_model = parseModel(model, raw_schema)
+            model_tables[model.path] = sql_model
         except ParseError as e:
-            print(f"Error parsing SQL for model {model_key}: {e}")
-            model_tables[model_key] = []
+            print(f"Error parsing SQL for model {model.path}: {e}")
+            model_tables[model.path] = []
     return model_tables
 
 
 
-def parseSelectExpression(expr: exp.Expr, list_of_columns: set[str]):
-    if isinstance(expr, exp.Column):
-        list_of_columns.add(expr.sql())
-    elif isinstance(expr, exp.Expr):
-            for arg in expr.args.values():
-                if arg is not None:
-                    parseSelectExpression(arg, list_of_columns)
-    elif isinstance(expr, list):
-            for i in expr:
-                parseSelectExpression(i, list_of_columns)
-    return list_of_columns
+def parseModel(model: RawModel, raw_schema: dict[str, List[ColRef]]):
 
-def parseCTELess(model_name:str, filename:str, file_path:str, query: exp.Select):
+    query = model.query
+
     uncte_query = query.copy()
     uncte_query.set("with_", None)
+
+    table_column_map: dict[str, List[ColRef]] = dict()
     
-
-    [tables, columns] = parseSelect(uncte_query)
-    ctes : set[TableInfo] = set()
-    cte_names = {cte.alias_or_name.lower() for cte in query.ctes} if hasattr(query, 'ctes') else []
-
-    all_cte_columns = {}
-
-
+    if model.name == 'reddit_trending_with_prices':
+         print('')
+         
     for cte in query.find_all(exp.CTE):
-        [cte_tables, cte_columns] = parseSelect(cte)
-        tables |= cte_tables  # Or: tables.update(cte_tables)
-        all_cte_columns[cte.alias_or_name] = cte_columns
-    for table in set(tables):
-        ref_table_name = table.fullname
-        if ref_table_name.replace('"' , '') in cte_names:
-                        ctes.add(table)
-                        tables.remove(table)
 
-    return SqlModelInfo(name=model_name,
-                         file_name=filename , 
-                         file_path=file_path, 
-                         table_names=tables, 
-                         cte_names=ctes,
+        for sq in cte.find_all(exp.Subquery):
+             sub_refs = parseSelect(sq, table_column_map, raw_schema)
+             table_column_map[sq.alias_or_name] = sub_refs
+         
+        cte_refs = parseSelect(cte, table_column_map, raw_schema)
+        table_column_map[cte.alias_or_name] = cte_refs
+    
+ 
+    for cte in uncte_query.find_all(exp.Subquery):
+         sub_refs = parseSelect(cte, table_column_map, raw_schema)
+         table_column_map[cte.alias_or_name] = sub_refs
+    
+    cte_names = {cte.alias_or_name for cte in query.ctes} if hasattr(query, 'ctes') else []
+    sq_aliases = {cte.alias_or_name for cte in query.find_all(exp.Subquery)}
+
+
+    columns = parseSelect(uncte_query, table_column_map, raw_schema)
+
+    table_names = set([table.name for table in query.find_all(exp.Table) if table.alias_or_name not in cte_names and table.name not in cte_names and table.alias_or_name not in sq_aliases])
+
+    if str(table_column_map).find('*') >= 0:
+         print('Found Star')
+
+    if str(columns).find('*') >= 0:
+         print('Found Star')
+
+    return SqlModelInfo(name=model.name,
+                         file_name=model.file_name , 
+                         file_path=model.path,
                          columns=columns,
-                         cte_columns=all_cte_columns
+                         table_names=table_names
                          )
-def parseTableFields(query:exp.Select|exp.CTE):
-     alias_to_table = {}
-     for table in query.find_all(exp.Table):
-         real_name = table.name
-         # If the table has an alias, use it as the key; otherwise, use the table name itself
-         prefix = table.alias if table.alias else real_name
-         alias_to_table[prefix] = real_name
-     
-     table_fields = defaultdict(set)
-     unprefixed_fields = set()
-     for col in query.find_all(exp.Column):
-                         col_name = col.name
-                         col_prefix = col.table  # e.g., 'b' in 'b.branch_name'
-     
-                         if col_prefix:
-                             real_table_name = alias_to_table.get(col_prefix, col_prefix)
-                             table_fields[real_table_name].add(col_name)
-                         else:
-                             unprefixed_fields.add(col_name)
-     return [table_fields, unprefixed_fields]
 
-def parseSelect(query: exp.Select|exp.CTE):
-     
-            table_fields, unprefixed_fields = parseTableFields(query)
+
+def parseColumn(column: exp.Column, table_map, all_table_map:dict[str, List[ColRef]], schema:dict[str, List[ColRef]]):
+    if column.name == '*':
+        exp_cols = expand_single_wildcard(column.table, table_map, all_table_map, schema)
+        return exp_cols
+    table_name = next(iter(table_map)) if len(table_map) == 1 else get_table_from_column(column, table_map, all_table_map, schema)
+    if table_name in all_table_map:
+        return [ColRef(name=column.alias_or_name, table=table_name, refs=all_table_map[table_name])]
+    elif table_name in schema:
+         return [ColRef(name=column.alias_or_name, table=table_name, refs=schema[table_name])]
+    else:return [ColRef(name=column.alias_or_name, table=table_name)]
+
+def parseSelect(query: exp.Query|exp.CTE|exp.Subquery, all_table_map:dict[str, List[ColRef]], schema:dict[str, List[ColRef]]):
             
-            all_tables = query.find_all(exp.Table)
-            tables: set[TableInfo] = set()
-            for table in all_tables:
-                unaliased_table = table.copy()
-                unaliased_table.set("alias", None)
-                ref_table_name = unaliased_table.sql()
-                if type(query) == exp.Select:
-                    cte_names = {cte.alias_or_name.lower() for cte in query.ctes}
-                    # Inside your tables loop:
-                    if ref_table_name.lower() in cte_names:
-                        continue 
-                real_name = table.name
-                prefix = real_name
-                fields: frozenset[str]
-                if(len(table_fields) == 0):
-                    fields = frozenset(unprefixed_fields)
+            tables = list(query.find_all(exp.Table))
+
+            table_map = {table.alias_or_name: table.name for table in tables}
+
+            all_columns : List[ColRef] = []
+
+            for expr in query.selects:
+                columns: List[ColRef] = []
+                if isinstance(expr, exp.Star):
+                     exp_cols = expand_full_wildcard(expr, tables, all_table_map, schema)
+                     all_columns.extend(exp_cols)
+                     if len(exp_cols) == 0:
+                          print('Failed')
+                     continue
+
+                if isinstance(expr, exp.Column):
+                     all_columns.extend(parseColumn(expr, table_map, all_table_map, schema))
+                     continue
                 else:
-                    fields = frozenset(table_fields.get(prefix, set()))
-                tables.add(
-                    TableInfo(
-                        fullname=ref_table_name,
-                        name=table.name,
-                        db=table.db,
-                        catalog=table.catalog,
-                        alias=table.alias,
-                        fields=fields,
-                    )
-                )
+                    for column in expr.find_all(exp.Column):
+                        columns.extend(parseColumn(column, table_map, all_table_map, schema))
 
-            
-            columns = makeColumns(query, tables)
+                if(expr.alias_or_name == '*'):
+                     all_columns.extend(columns)
+                else: all_columns.append(ColRef(name=expr.alias_or_name, table=query.alias_or_name, refs=columns))
 
-            
-            return [tables, columns]
+            return all_columns
+
+def expand_single_wildcard(table_name:str, table_map:dict, table_column_map:dict[str, List[ColRef]], schema:dict[str, List[ColRef]]):
+    cols : List[ColRef] = []
+
+    if table_name in table_map:
+        table_name = table_map[table_name]
 
 
-def makeColumns(query: exp.Select|exp.CTE, tables: set[TableInfo]):
-    columns = {}
-    for expr in query.selects:
-        sources = parseSelectExpression(expr, set())
+    if table_name in table_column_map:
+        colrefs = table_column_map[table_name]
+        cols.extend(colrefs)
+    elif table_name in schema:
+         columns = schema[table_name]
+         for col in columns:  
+            cols.append(ColRef(name=col.name, table=table_name))
+    return cols
 
-        # Case 1: Single table query (auto-qualify with table full name)
-        if len(tables) == 1:
-            single_table = next(iter(tables))
-            table_alias = single_table.fullname
-            columns[expr.alias_or_name] = [
-                f"{table_alias}.{src.split('.')[-1]}" for src in sources
-            ]
+def expand_full_wildcard(expr:exp.Star, query_tables:List[exp.Table], table_column_map:dict[str, List[ColRef]], schema:dict[str, List[ColRef]]):
+    cols : List[ColRef] = []
+    for table in query_tables:
+        table_name = table.name
+        if table_name in table_column_map:
+            colrefs = table_column_map[table_name]
+            cols.extend(colrefs)
+        elif table_name in schema:
+             columns = schema[table_name]
+             for col in columns:  
+                cols.append(ColRef(name=col.name, table=table_name))
+    return cols
 
-        # Case 2: Multiple tables (match source table prefix against table definitions)
-        else:
-            updated_sources = []
-            for source in sources:
-                split_parts = source.split(".")
-
-                # If qualified (e.g. "t1.col_name")
-                if len(split_parts) == 2:
-                    col_table_alias, col_name = split_parts[0], split_parts[1]
-                    clean_alias = col_table_alias.replace('"', "")
-
-                    actual_table = next(
-                        (
-                            t
-                            for t in tables
-                            if (t.alias and t.alias == clean_alias)
-                            or t.name == col_table_alias
-                            or t.fullname == col_table_alias
-                        ),
-                        None,
-                    )
-
-                    if actual_table:
-                        updated_sources.append(f"{actual_table.fullname}.{col_name}")
-                    else:
-                        print(
-                            f"⚠️ Warning: Could not find matching table for column source: {source}"
-                        )
-                        updated_sources.append(source)
-                else:
-                    updated_sources.append(source)
-
-            columns[expr.alias_or_name] = updated_sources
-    return columns
+def get_table_from_column(column: exp.Column, table_map: dict, all_table_map:dict[str, List[ColRef]], schema:dict[str, List[ColRef]]):
+    table_name = column.table
+    if table_name in table_map:
+        return table_map[table_name]
+    elif table_name in all_table_map:
+         return table_name
+    elif table_name in schema:
+         return table_name
+    else:
+         print(f'Table {table_name} not found for Column {column.sql()}')
+         return table_name
+    
