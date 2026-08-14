@@ -1,6 +1,8 @@
 
 from pydantic import BaseModel, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Tuple
+from dataclasses import dataclass
+from sqlglot import exp
 
 class SqlModelInfo(BaseModel):
     name: str
@@ -22,3 +24,16 @@ class TableInfo(BaseModel):
     catalog: Optional[str]
     alias:Optional[str]
     fields: frozenset[str]
+
+@dataclass
+class RawModel:
+    name:str
+    path:str
+    file_name:str
+    query:exp.Query
+
+class ColRef(BaseModel):
+    model_config = {"frozen": True}
+    name: str
+    table: str
+    refs: Tuple["ColRef", ...] = ()
