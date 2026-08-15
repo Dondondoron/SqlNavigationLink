@@ -1,6 +1,7 @@
 import { LineageInfo } from "../domain/domain";
 import { getVsCodeApi } from "../utils/vscodeAPI";
 import { Card } from "./Card";
+import { Zoomer } from "./lineage-zoom";
 import { LineageManager } from "./LineageManager";
 
 const vscode = getVsCodeApi();
@@ -16,7 +17,7 @@ window.addEventListener('message', event => {
 
 const lineageManager = new LineageManager()
 
-
+const zoomer = Zoomer.getInstance()
 
 
 const eventListener = (e: Event) => {
@@ -127,11 +128,6 @@ export function renderLineage(data: LineageInfo) {
 
 
 }
-
-let currentScale = 1;
-const MIN_SCALE = 0.3;
-const MAX_SCALE = 3.0;
-const ZOOM_SPEED = 0.1;
 
 
 document.removeEventListener('click', eventListener)
