@@ -31,6 +31,7 @@ class RawModel:
     path:str
     file_name:str
     query:exp.Query
+    tables:set
 
 class ColRef(BaseModel):
     model_config = {"frozen": True}

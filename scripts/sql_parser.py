@@ -7,8 +7,49 @@ from sqlglot import exp
 from classes import SqlModelInfo, TableInfo, ColRef, RawModel
 import json
 import logging
+from graphlib import TopologicalSorter
 
 
+def sort(raw_models: List[RawModel]):
+    # 1. Map names to objects
+    model_map = {m.name: m for m in raw_models}
+
+    # 2. FAST DEPENDENCY LOOKUP (Runs in O(N) instead of O(N^2))
+    # Build a lookup dictionary: table_name -> set of models that reference it
+    referenced_by = {}
+    for m in raw_models:
+        for table_name in m.tables:
+            if table_name not in referenced_by:
+                referenced_by[table_name] = set()
+            referenced_by[table_name].add(m.name)
+
+    # 3. BUILD THE GRAPH (Independent models first)
+    dependencies = {}
+    for m in raw_models:
+        # If other models reference this model's name in their tables,
+        # those other models DEPEND on this model.
+        # Therefore, this model must come BEFORE them.
+        # TopologicalSorter expects: node -> set of its prerequisites.
+        # So, the other models have 'm.name' as a prerequisite.
+
+        # We initialize every model in the graph
+        if m.name not in dependencies:
+            dependencies[m.name] = set()
+
+        # Find who depends on us, and mark us as their prerequisite
+        dependent_models = referenced_by.get(m.name, set())
+        for dep_model in dependent_models:
+            if dep_model != m.name and dep_model in model_map:
+                if dep_model not in dependencies:
+                    dependencies[dep_model] = set()
+                dependencies[dep_model].add(m.name)
+
+    # 4. SORT AND REBUILD
+    ts = TopologicalSorter(dependencies)
+    sorted_names = list(ts.static_order())
+    sorted_models = [model_map[name] for name in sorted_names]
+
+    return sorted_models
 
 def parse_sql_models_and_extract_tables(models):
     # Dict to store tables found per model
@@ -35,16 +76,29 @@ def parse_sql_models_and_extract_tables(models):
         if sql_statement is None or not isinstance(sql_statement, exp.Query):
             continue
 
+        tables = set((table.name for table in sql_statement.find_all(exp.Table)))
         filename = Path(model_key).name
         raw_schema[model_name] = [ColRef(name=sel, table=model_name) for sel in sql_statement.named_selects]
-        raw_models.append(RawModel(model_name, model_key, filename, sql_statement))
-         
-    for model in raw_models:
+        raw_models.append(RawModel(model_name, model_key, filename, sql_statement, tables))
+
+
+    sorted_models = sort(raw_models)
+
+    #all_referenced_tables = {table for m in raw_models for table in m.tables}
+    #raw_models.sort(key=lambda x: 0 if x.name in all_referenced_tables else 1)
+    
+    for model in sorted_models:
         
         try:
             
             sql_model = parseModel(model, raw_schema)
             model_tables[model.path] = sql_model
+
+            if model.name in raw_schema:
+                schematic = raw_schema[model.name]
+                if len(schematic) == 1:
+                    raw_schema[model.name] = [ColRef(name=col.name, table=model.name) for col in sql_model.columns]
+            
         except ParseError as e:
             print(f"Error parsing SQL for model {model.path}: {e}")
             model_tables[model.path] = []
