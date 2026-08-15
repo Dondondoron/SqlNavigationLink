@@ -217,10 +217,6 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
             vscode.Uri.joinPath(this._extensionUri, 'media', 'lineageViewer', 'index.js')
         );
 
-        const jsUriScroll = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'media', 'lineageViewer', 'lineage-zoom.js')
-        );
-
         // Read HTML template from disk
         const htmlPath = path.join(this._extensionUri.fsPath, 'media', 'lineageViewer', 'lineage.html');
         let htmlContent = fs.readFileSync(htmlPath, 'utf8');
@@ -228,7 +224,6 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
         // Replace placeholders with real URIs
         return htmlContent
             .replace('{{cssUri}}', cssUri.toString())
-            .replace('{{jsUri}}', jsUri.toString())
-            .replace('{{jsUri2}}', jsUriScroll.toString());
+            .replace('{{jsUri}}', jsUri.toString());
     }
 }

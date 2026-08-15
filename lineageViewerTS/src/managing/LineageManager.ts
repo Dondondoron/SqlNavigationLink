@@ -1,5 +1,6 @@
 import { LineageInfo } from "../domain/domain";
 import { Card } from "./Card";
+import { Zoomer } from "./lineage-zoom";
 
 
 
@@ -19,10 +20,11 @@ export class LineageManager {
         this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
         this.svg.classList.add('svg')
 
-        const canvasArea = document.getElementById('lineage-container')!
+        const canvasArea = document.getElementById('canvas-area')!
+        const lineageArea = document.getElementById('lineage-container')!
 
 
-        canvasArea.appendChild(this.svg)
+        lineageArea.appendChild(this.svg)
     }
 
 
@@ -90,35 +92,37 @@ export class LineageManager {
     }
 
     paintConnections(connections: { a: Element; b: Element; }[]) {
-        // Ensure existing rendered paths are cleared if needed before redrawing
-        this.svg.replaceChildren();
+    // Ensure existing rendered paths are cleared if needed before redrawing
+    this.svg.replaceChildren();
 
-        const svgRect = this.svg.getBoundingClientRect();
+    const svgRect = this.svg.getBoundingClientRect();
+    const zoomer = Zoomer.getInstance();
 
-        connections.forEach(con => {
-            const rectA = con.a.getBoundingClientRect();
-            const rectB = con.b.getBoundingClientRect();
+    const scale = zoomer.scale || 1;
 
-            // Calculate center-right of element A relative to the SVG container
-            const fromX = rectA.right - svgRect.left;
-            const fromY = rectA.top + rectA.height / 2 - svgRect.top;
+    connections.forEach(con => {
+        const rectA = con.a.getBoundingClientRect();
+        const rectB = con.b.getBoundingClientRect();
 
-            // Calculate center-left of element B relative to the SVG container
-            const toX = rectB.left - svgRect.left;
-            const toY = rectB.top + rectB.height / 2 - svgRect.top;
+        // Account for SVG container offset, pan (translate), and zoom (scale)
+        const fromX = (rectA.right - svgRect.left ) / scale;
+        const fromY = (rectA.top + rectA.height / 2 - svgRect.top ) / scale;
 
-            // Generate bezier path data
-            const pathData = LineageManager.createHorizontalCurvedPath(fromX, fromY, toX, toY);
+        const toX = (rectB.left - svgRect.left ) / scale;
+        const toY = (rectB.top + rectB.height / 2 - svgRect.top ) / scale;
 
-            // Create and append SVG path element
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            path.setAttribute('d', pathData);
-            path.setAttribute('stroke-width', '2');
-            path.setAttribute('fill', 'none');
+        // Generate bezier path data in the canvas/world coordinate space
+        const pathData = LineageManager.createHorizontalCurvedPath(fromX, fromY, toX, toY);
 
-            this.svg.appendChild(path);
-        });
-    }
+        // Create and append SVG path element
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', pathData);
+        path.setAttribute('stroke-width', String(2 / scale)); // Optional: keeps stroke width consistent when zooming
+        path.setAttribute('fill', 'none');
+
+        this.svg.appendChild(path);
+    });
+}
 
     static createHorizontalCurvedPath(fromX: number, fromY: number, toX: number, toY: number): string {
         if (toX < fromX) {

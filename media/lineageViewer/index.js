@@ -216,6 +216,155 @@
     }
   };
 
+  // lineageViewerTS/src/managing/lineage-zoom.ts
+  var Zoomer = class _Zoomer {
+    static smoothing = 0.15;
+    static zoomIntensity = 1e-3;
+    static instance;
+    static getInstance() {
+      if (!this.instance) {
+        this.instance = new _Zoomer();
+      }
+      return this.instance;
+    }
+    isAnimating = false;
+    translateX = 0;
+    translateY = 0;
+    scale = 1;
+    targetTranslateX = 0;
+    targetTranslateY = 0;
+    targetScale = 1;
+    timestamp = Date.now();
+    isPanning = false;
+    panStartX = 0;
+    panStartY = 0;
+    panActualStartX = 0;
+    panActualStartY = 0;
+    canvasArea = document.getElementById("canvas-area");
+    canvas = document.getElementById("lineage-container");
+    constructor() {
+      window.addEventListener("wheel", (e) => {
+        this.handleWheel(e);
+      }, { passive: false });
+      window.addEventListener("mousedown", (e) => {
+        this.handleMouseDown(e);
+      });
+      window.addEventListener("mousemove", (e) => {
+        this.handleMouseMove(e);
+      });
+      window.addEventListener("mouseup", (e) => {
+        this.handleMouseUp(e);
+      });
+    }
+    handleMouseDown(e) {
+      this.isPanning = true;
+      this.panStartX = e.clientX;
+      this.panStartY = e.clientY;
+      this.panActualStartX = e.clientX;
+      this.panActualStartY = e.clientY;
+      this.canvas.style.cursor = "grabbing";
+    }
+    handleMouseMove(e) {
+      if (this.isPanning) {
+        if (this.isAnimating) this.isAnimating = false;
+        const dx = e.clientX - this.panStartX;
+        const dy = e.clientY - this.panStartY;
+        this.translateX += dx;
+        this.translateY += dy;
+        this.targetTranslateX = this.translateX;
+        this.targetTranslateY = this.translateY;
+        this.panStartX = e.clientX;
+        this.panStartY = e.clientY;
+        this.updateTransform();
+      }
+    }
+    handleMouseUp(e) {
+      if (this.isPanning) {
+        this.isPanning = false;
+        this.canvas.style.cursor = "default";
+        const dx = e.clientX - this.panActualStartX;
+        const dy = e.clientY - this.panActualStartY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const threshold = 10;
+        if (distance > threshold) {
+          return;
+        }
+      }
+    }
+    handleWheel(e) {
+      e.preventDefault();
+      if (e.shiftKey) {
+        const panAmount = e.deltaY;
+        if (!this.isAnimating) {
+          this.translateX -= panAmount;
+          this.targetTranslateX = this.translateX;
+          this.updateTransform();
+        } else {
+          this.targetTranslateX -= panAmount;
+        }
+        return;
+      }
+      if (e.ctrlKey) {
+        const panAmount = e.deltaY;
+        if (!this.isAnimating) {
+          this.translateY -= panAmount;
+          this.targetTranslateY = this.translateY;
+          this.updateTransform();
+        } else {
+          this.targetTranslateY -= panAmount;
+        }
+        return;
+      }
+      const scrollDelta = -e.deltaY;
+      if (!this.isAnimating) this.targetScale = this.scale;
+      const mouseX = e.clientX;
+      const mouseY = e.clientY;
+      const worldMouseX = (mouseX - this.translateX) / this.scale;
+      const worldMouseY = (mouseY - this.translateY) / this.scale;
+      const newTargetScale = this.targetScale * Math.exp(scrollDelta * _Zoomer.zoomIntensity);
+      this.targetScale = Math.max(0.2, Math.min(3, newTargetScale));
+      this.targetTranslateX = mouseX - worldMouseX * this.targetScale;
+      this.targetTranslateY = mouseY - worldMouseY * this.targetScale;
+      if (!this.isAnimating) {
+        this.isAnimating = true;
+        requestAnimationFrame(() => this.animateZoom());
+      }
+    }
+    animateZoom() {
+      if (!this.isAnimating) return;
+      this.scale += (this.targetScale - this.scale) * _Zoomer.smoothing;
+      this.translateX += (this.targetTranslateX - this.translateX) * _Zoomer.smoothing;
+      this.translateY += (this.targetTranslateY - this.translateY) * _Zoomer.smoothing;
+      this.updateTransform();
+      const scaleDiff = Math.abs(this.targetScale - this.scale);
+      const txDiff = Math.abs(this.targetTranslateX - this.translateX);
+      const tyDiff = Math.abs(this.targetTranslateY - this.translateY);
+      if (scaleDiff < 1e-3 && txDiff < 1e-3 && tyDiff < 1e-3) {
+        this.scale = this.targetScale;
+        this.translateX = this.targetTranslateX;
+        this.translateY = this.targetTranslateY;
+        this.isAnimating = false;
+      } else {
+        requestAnimationFrame(() => this.animateZoom());
+      }
+    }
+    updateTransform() {
+      this.update(this.scale, this.translateX, this.translateY);
+      this.canvas.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.scale})`;
+      const bgSpacing = 50 * this.scale;
+      this.canvasArea.style.backgroundSize = `100% ${bgSpacing}%`;
+    }
+    update(scale, tx, ty) {
+      this.scale = scale;
+      this.translateX = tx;
+      this.translateY = ty;
+      this.scale = scale;
+      this.translateX = tx;
+      this.translateY = ty;
+      this.timestamp = Date.now();
+    }
+  };
+
   // lineageViewerTS/src/managing/LineageManager.ts
   var LineageManager = class _LineageManager {
     centerCard;
@@ -224,8 +373,9 @@
     constructor() {
       this.svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
       this.svg.classList.add("svg");
-      const canvasArea = document.getElementById("lineage-container");
-      canvasArea.appendChild(this.svg);
+      const canvasArea = document.getElementById("canvas-area");
+      const lineageArea = document.getElementById("lineage-container");
+      lineageArea.appendChild(this.svg);
     }
     initData(data) {
       const centerContainer = document.getElementById("center-nodes");
@@ -268,17 +418,19 @@
     paintConnections(connections) {
       this.svg.replaceChildren();
       const svgRect = this.svg.getBoundingClientRect();
+      const zoomer2 = Zoomer.getInstance();
+      const scale = zoomer2.scale || 1;
       connections.forEach((con) => {
         const rectA = con.a.getBoundingClientRect();
         const rectB = con.b.getBoundingClientRect();
-        const fromX = rectA.right - svgRect.left;
-        const fromY = rectA.top + rectA.height / 2 - svgRect.top;
-        const toX = rectB.left - svgRect.left;
-        const toY = rectB.top + rectB.height / 2 - svgRect.top;
+        const fromX = (rectA.right - svgRect.left) / scale;
+        const fromY = (rectA.top + rectA.height / 2 - svgRect.top) / scale;
+        const toX = (rectB.left - svgRect.left) / scale;
+        const toY = (rectB.top + rectB.height / 2 - svgRect.top) / scale;
         const pathData = _LineageManager.createHorizontalCurvedPath(fromX, fromY, toX, toY);
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
         path.setAttribute("d", pathData);
-        path.setAttribute("stroke-width", "2");
+        path.setAttribute("stroke-width", String(2 / scale));
         path.setAttribute("fill", "none");
         this.svg.appendChild(path);
       });
@@ -317,6 +469,7 @@
     }
   });
   var lineageManager = new LineageManager();
+  var zoomer = Zoomer.getInstance();
   var eventListener = (e) => {
     if (!(e.target instanceof HTMLElement)) return;
     const changeSizeButton = e.target?.closest("button[data-action]");
