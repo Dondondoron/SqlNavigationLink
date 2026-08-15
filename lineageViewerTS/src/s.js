@@ -46,7 +46,6 @@ function createCard(data, isCenter = false, direction = 'left') {
         fieldsContainer.id = id
         fieldsContainer.className = 'fields-container'
 
-        debugger
 
         for (const field of Object.entries(modelInfo.columns)) {
             const fieldItem = document.createElement('li')

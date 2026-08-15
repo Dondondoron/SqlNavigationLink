@@ -1,3 +1,4 @@
+import { LineageInfo } from "../domain/domain";
 import { Card } from "./Card";
 
 
@@ -5,7 +6,7 @@ import { Card } from "./Card";
 
 
 export class LineageManager {
-    
+
 
 
     centerCard?: Card
@@ -25,36 +26,26 @@ export class LineageManager {
     }
 
 
-    initData(data: any) {
+    initData(data: LineageInfo) {
 
-        const leftContainer = document.getElementById('left-nodes')!;
+
         const centerContainer = document.getElementById('center-nodes')!;
         const rightContainer = document.getElementById('right-nodes')!;
 
         Card.card_stack.clear()
 
         // Center Node
-        if (data.centerModel) {
 
-            const centerCard = new Card(data.centerModel, true)
-            this.centerCard = centerCard
-            centerContainer.appendChild(centerCard.cardContainer);
-        }
+        const centerCard = new Card(data.centerModel, true)
+        this.centerCard = centerCard
+        centerContainer.appendChild(centerCard.cardContainer);
 
-        // Left Nodes
-        if (data.leftRefs && data.leftRefs.length > 0) {
-            data.leftRefs.forEach((ref: any) => {
-                const leftCard = new Card(ref, false, 'left');
-                leftContainer.appendChild(leftCard.cardContainer);
-            });
-        } else {
-            leftContainer.innerHTML = '<div class="empty-state">None</div>';
-        }
 
         // Right Nodes
         if (data.rightRefs && data.rightRefs.length > 0) {
             data.rightRefs.forEach((ref: any) => {
-                const rightCard = new Card(ref, false, 'right');
+                const rightCard = new Card(ref, false, 'right', centerCard);
+                centerCard.childCards.set(rightCard.id, rightCard)
                 rightContainer.appendChild(rightCard.cardContainer);
             });
         } else {
@@ -70,10 +61,14 @@ export class LineageManager {
 
         if (focusCard && focusCard.isCenter) {
 
+            document.querySelectorAll('.field-item').forEach(c => {
+                c.classList.remove('selected')
+            })
+
             Card.card_stack.forEach(card => {
-                    card.reset()
+                card.reset()
                 if (card !== this.centerCard) card.showFieldsContainer(false)
-                
+
             })
 
             const connections = focusCard?.showLineage(column, [], null)
