@@ -1,7 +1,15 @@
-from typing import List
+from typing import List, Dict
+
+from pathlib import Path
+
+
+import linecache
+from collections import  defaultdict
+
 from sqlmesh.core.context import Context
 from sqlglot import  parse, ParseError
 
+from sqlmesh.core import constants as c
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.core.dialect import  MacroFunc
 from sqlmesh.core.macros import MacroEvaluator, normalize_macro_name
@@ -14,6 +22,24 @@ def parse_sqlmesh(paths:List[str], config_files: List[str]):
     
     for loader in context._loaders:
          with sys_path(loader.config_path):
+            linecache.clearcache()
+            loader._path_mtimes.clear()
+
+            loader._load_materializations()
+            signals = loader._load_signals()
+
+            config_mtimes: Dict[Path, List[float]] = defaultdict(list)
+
+            for config_file in loader.config_path.glob("config.*"):
+                loader._track_file(config_file)
+                config_mtimes[loader.config_path].append(loader._path_mtimes[config_file])
+
+            for config_file in c.SQLMESH_PATH.glob("config.*"):
+                loader._track_file(config_file)
+                config_mtimes[c.SQLMESH_PATH].append(loader._path_mtimes[config_file])
+
+            loader._config_mtimes = {path: max(mtimes) for path, mtimes in config_mtimes.items()}
+
             macros, macro_registry = loader._load_scripts()
             all_macros.update(macros)
 
@@ -41,12 +67,7 @@ def parse_files(paths:List[str], macros):
             if expression is None:
                  continue
             
-            for macrofunc in list(expression.find_all(MacroFunc)):
-                evaluated = evaluator.evaluate(macrofunc)
-                
-                evaluator.eval_expression(macrofunc)
-                macrofunc.replace(evaluated)
-
+            parse_macro(expression=expression, evaluator=evaluator)
             parsed_trees[path] = expressions
 
         except ParseError as e:
@@ -55,4 +76,17 @@ def parse_files(paths:List[str], macros):
             print(f"⚠️ Failed to read file {path}: {e}")
     return parsed_trees
 
-
+def parse_macro(expression, evaluator):
+    for macrofunc in list(expression.find_all(MacroFunc)):
+        try: 
+            evaluated = evaluator.evaluate(macrofunc)
+        
+            evaluator.eval_expression(macrofunc)
+            macrofunc.replace(evaluated)
+        except ParseError as e:
+            print(f'Parse Error on MacroEvaluator: {e} on macro: {macrofunc.sql()}')
+            continue
+        except Exception:
+            print(f'Parse Exception on MacroEvaluator: {e} on macro: {macrofunc.sql()}')
+            continue
+    
