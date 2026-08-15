@@ -117,7 +117,7 @@ class DBTParser:
 
         self.env.globals = CatchAllGlobals({
             "ref": lambda *args: f"{args[-1]}",
-            "source": lambda source_name, table_name: f"{source_name}.{table_name}",
+            "source": lambda source_name, table_name: f'{source_name}."{table_name}"',
             "var": lambda name, default=None: extracted_vars.get(name, default or f"/* var_{name} */")
         })
         self.env.undefined = CatchAllUndefined
