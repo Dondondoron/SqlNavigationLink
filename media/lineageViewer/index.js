@@ -46,6 +46,7 @@
       fieldItem.dataset.column = column.name;
       fieldItem.title = column.table + "." + column.name;
     }
+    fieldItem;
     name;
     table;
     refs;
@@ -106,6 +107,13 @@
       });
       if (!this.isCenter) this.showFieldsContainer(false);
     }
+    cardContainer;
+    card;
+    cardHeader;
+    titleSpan;
+    fieldButton;
+    fieldsContainer;
+    childCards;
     static card_stack = /* @__PURE__ */ new Map();
     parent;
     id;
