@@ -40,9 +40,9 @@ button:hover {
 
 .lineage-container {
     position: absolute;
+    align-items: start;
     display: grid;
     grid-template-columns: 1fr auto 1fr;
-    align-items: center;
     gap: 16px;
 
     width: 100%;
@@ -94,6 +94,7 @@ button:hover {
     border: 1px solid var(--vscode-widget-border, #333);
     border-radius: 6px;
     justify-content: center;
+    align-items: flex-start;
 }
 
 .node-card header {

@@ -1,3 +1,4 @@
+import { LineageInfo } from "../domain/domain";
 import { getVsCodeApi } from "../utils/vscodeAPI";
 import { Card } from "./Card";
 import { LineageManager } from "./LineageManager";
@@ -55,7 +56,7 @@ const eventListener = (e: Event) => {
     if (button instanceof HTMLElement) {
         e.stopPropagation();
 
-        const card = Card.card_stack.get(button.dataset.card??'')
+        const card = Card.card_stack.get(button.dataset.id??'')
 
         if (card) {
 
@@ -75,7 +76,7 @@ const eventListener = (e: Event) => {
 
         const column = columnItem.dataset.column
 
-        lineageManager.showLineageOnCard(cardContainer?.dataset.card!, column)
+        lineageManager.showLineageOnCard(cardContainer?.dataset.id!, column)
 
         return;
 
@@ -86,8 +87,10 @@ const eventListener = (e: Event) => {
         const headerSpan = card.querySelector('header span');
         if (headerSpan?.textContent) {
             post('browse', headerSpan.textContent)
+            return
         }
     }
+
 }
 
 function post(command: string, ...args: any[]) {
@@ -99,7 +102,7 @@ function post(command: string, ...args: any[]) {
 }
 
 
-export function renderLineage(data: any) {
+export function renderLineage(data: LineageInfo) {
     const leftContainer = document.getElementById('left-nodes')!;
     const centerContainer = document.getElementById('center-nodes')!;
     const rightContainer = document.getElementById('right-nodes')!;

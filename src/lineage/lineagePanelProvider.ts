@@ -2,13 +2,10 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { SqlModelInfo, SqlModelProvider, TableInfo } from '../modelProvider';
+import { SqlModelInfoTree, SqlModelProvider } from '../modelProvider';
+import { Column, LineageInfo, ModelLineage, SqlModelInfo } from '../domain/domain';
 
-interface ModelLineage {
-    model: SqlModelInfo | TableInfo
-    refs?: ModelLineage[]
-    fields?: string[]
-}
+
 
 export class LineagePanelProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
@@ -70,7 +67,7 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
     }
 
     public init() {
-    
+
         const openDocument = vscode.window.activeTextEditor?.document
         if (openDocument) this.openedSqlFile(openDocument.uri)
     }
@@ -92,30 +89,65 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
 
         this.currentUri = uri
 
-        function loopModelToRefLeftSide(model: SqlModelInfo, maxLoops: number, currentDepth: number = 2): ModelLineage[] {
-            return model.table_names.map(l => {
-                const out = arrayedModels.find(m => m.name === l.fullname.replaceAll('"', '')) ?? l;
-                const isSqlModel = out instanceof SqlModelInfo;
+        function getLeafs(column: Column, tables: Map<string, Column[]>) {
 
-                // Only recurse deeper if we haven't hit maxLoops yet
+            if (column.refs.length > 0) {
+                column.refs.forEach(ref => getLeafs(ref, tables))
+            } else {
+                if (tables.has(column.table)) {
+                    tables.get(column.table)?.push(column)
+                }
+                else tables.set(column.table, [column])
+            }
+            return tables
+        }
+
+        function loopModelToRefLeftSide(model: SqlModelInfoTree, maxLoops: number, currentDepth: number = 2): ModelLineage[] {
+            const leafMap: Map<string, Column[]> = new Map();
+
+            model.columns.forEach(m => {
+                getLeafs(m, leafMap);
+            });
+
+            return Array.from(leafMap).map((t) => {
+                const found = arrayedModels.find(m => m.name === t[0].replaceAll('"', ''));
+
+                const out = found ?? t;
+
+                const isSqlModel = !Array.isArray(out);
+
                 const canGoDeeper = isSqlModel && currentDepth < maxLoops;
 
                 return {
-                    model: out,
-                    // Depth 2 items get refs: [] when maxLoops = 2
-                    refs: canGoDeeper ? loopModelToRefLeftSide(out, maxLoops, currentDepth + 1) : [],
-                    fields: l.fields
+                    model: isSqlModel
+                        ? out
+                        : { name: t[0], file_name: '', file_path: '', table_names: [], columns: t[1] },
+
+                    refs: canGoDeeper ? loopModelToRefLeftSide(out as SqlModelInfoTree, maxLoops, currentDepth + 1) : [],
+
+                    fields: isSqlModel ? (out as SqlModelInfoTree).columns.map(c => c.name) : t[1].map(c => c.name)
                 };
             });
         }
 
-        const leftRefs = (model.table_names || []).map(t => t)
+        const leafMap: Map<string, Column[]> = new Map();
+
+        model.columns.forEach(m => {
+            getLeafs(m, leafMap);
+        });
+
+
+        const leftRefs = Array.from(leafMap)
             .map(ti => {
-                const nextModel = arrayedModels.find(m => m.name === ti.fullname.replaceAll('"', '')) ?? ti
+                const nextModel = arrayedModels.find(m => m.name === ti[0].replaceAll('"', '')) ?? ti[0]
+                const isSqlModel = nextModel instanceof SqlModelInfoTree;
+
+                model.columns
+
                 return {
-                    model: nextModel,
-                    refs: nextModel instanceof SqlModelInfo && this.currentLeftDepth > 1 ? loopModelToRefLeftSide(nextModel, this.currentLeftDepth) : [],
-                    fields: ti.fields
+                    model: isSqlModel ? nextModel : { name: nextModel, file_name: '', file_path: '', table_names: [], columns: ti[1] },
+                    refs: nextModel instanceof SqlModelInfoTree && this.currentLeftDepth > 1 ? loopModelToRefLeftSide(nextModel, this.currentLeftDepth) : [],
+                    fields: typeof nextModel === 'string' ? [] : nextModel.columns.map(c => c.name)
                 }
             });
 
@@ -125,42 +157,49 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
         function loopModelToRefRightSide(currentModel: SqlModelInfo, maxLoops: number, currentDepth: number = 2): ModelLineage[] {
             // Find all models that depend on currentModel
             const downstreamModels = arrayedModels.filter(m =>
-                m.table_names?.some(t => t.fullname.replaceAll('"', '') === currentModel.name)
+                m.table_names?.some(t => t.replaceAll('"', '') === currentModel.name)
             );
 
             return downstreamModels.map(m => {
-                // Find matching field metadata from downstream model's table_names entry
-                const matchingTable = m.table_names?.find(t => t.fullname.replaceAll('"', '') === currentModel.name);
 
                 const canGoDeeper = currentDepth < maxLoops;
 
                 return {
                     model: m,
                     refs: canGoDeeper ? loopModelToRefRightSide(m, maxLoops, currentDepth + 1) : [],
-                    fields: matchingTable?.fields
+                    fields: m.columns.filter(c=> c.table !== m.name).map(c=>c.name)
                 };
             });
         }
 
         // Right refs invocation (Downstream dependents)
-        const rightRefs = arrayedModels
-            .filter(m => m.table_names?.some(t => t.fullname.replaceAll('"', '') === model.name))
+        const rightRefs : ModelLineage[] = arrayedModels
+            .filter(m => m.table_names?.some(t => t.replaceAll('"', '') === model.name))
             .map(m => {
-                const matchingTable = m.table_names?.find(t => t.fullname.replaceAll('"', '') === model.name);
                 return {
                     model: m,
                     refs: this.currentRightDepth > 1 ? loopModelToRefRightSide(m, this.currentRightDepth) : [],
-                    fields: matchingTable?.fields
-                };
+                    fields: model.columns.filter(c=> c.table !== m.name).map(c=>c.name)
+                        };
             });
 
-        const data = {
-                centerModel: { model: model, refs: [] },
-                leftRefs,
-                rightRefs,
-                size_left: this.currentLeftDepth.toString(),
-                size_right: this.currentRightDepth.toString()
-            }
+
+
+
+        const centerModel: ModelLineage = {
+            model: model,
+            refs: leftRefs
+
+        }
+
+
+        const data: LineageInfo = {
+            centerModel: centerModel,
+            rightRefs: rightRefs,
+            size_left: this.currentLeftDepth.toString(),
+            size_right: this.currentRightDepth.toString()
+        }
+
 
         // Post message to the client side JS inside the webview
         this._view.webview.postMessage({

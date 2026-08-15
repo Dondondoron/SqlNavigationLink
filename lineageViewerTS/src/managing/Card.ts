@@ -1,20 +1,47 @@
+import { Column, ModelLineage, SqlModelInfo } from "../domain/domain"
 import { Utility } from "../utils/Utility"
 
 
+export class CardColumn implements Column {
+    name: string
+    table: string
+    refs: CardColumn[]
+
+    constructor(column: Column,
+        public fieldItem = document.createElement('li')
+    ) {
+        this.name = column.name
+        this.table = column.table
+        this.refs = []
+
+
+
+        fieldItem.className = 'field-item column-item'
+        fieldItem.textContent = column.name
+        fieldItem.dataset.column = column.name
+        fieldItem.title = column.table + '.' + column.name
+    }
+
+}
 
 
 export class Card {
 
     static card_stack: Map<string, Card> = new Map()
 
-    columnData: Map<string, any[]>
+    parent: Card | undefined
+    id: string
+    table: string
+    direction: "left" | "center" | "right"
+    columnData: Map<string, Column>
     cteColumnData: Map<string, Map<string, any[]>> = new Map()
 
     isCenter: boolean = false
     fieldsHidden: boolean = false
     containerHidden: boolean = true
+    cardColumns: Map<string, CardColumn> = new Map()
 
-    constructor(data: any, isCenter = false, direction = 'left',
+    constructor(model: ModelLineage, isCenter = false, direction: "left" | "right" = 'left', parent: Card | undefined = undefined,
         public cardContainer = document.createElement('div'),
         public card = document.createElement('div'),
         public cardHeader = document.createElement('header'),
@@ -25,18 +52,23 @@ export class Card {
 
     ) {
         const id = Utility.generateId()
+        this.id = id
+        this.direction = isCenter ? 'center' : direction
+        this.parent = parent
         this.isCenter = isCenter
         cardContainer.className = 'card_container'
 
         card.className = 'node-card' + (isCenter ? ' center' : '');
-        const modelInfo = data.model
-        const name = modelInfo.fullname ?? modelInfo.name
+        const modelInfo = model.model
+        const name = modelInfo.name
+        this.table = name
 
         cardContainer.dataset.card = name
+        cardContainer.dataset.id = id
 
         titleSpan.textContent = name
 
-        Card.card_stack.set(name, this)
+        Card.card_stack.set(id, this)
 
         fieldButton.className = 'fieldButton'
         fieldButton.dataset.card = name
@@ -47,62 +79,26 @@ export class Card {
 
         card.appendChild(cardHeader)
 
-        this.columnData = modelInfo.columns ? new Map(Object.entries(modelInfo.columns)) : new Map()
-
-
-        if (modelInfo.cte_columns) {
-            Object.entries(modelInfo.cte_columns).forEach((ctc: any) => {
-
-                const cteMap: Map<string, any> = new Map(Object.entries(ctc[1]))
-
-
-                this.cteColumnData.set(ctc[0], cteMap)
-
-            })
-        }
+        this.columnData = modelInfo.columns ? new Map(modelInfo.columns.map(c => [c.name, c])) : new Map()
 
 
         if (modelInfo.columns) {
             cardHeader.appendChild(fieldButton)
 
-
             fieldsContainer.id = 'fields-' + id
             fieldsContainer.className = 'fields-container'
-            if (!isCenter) fieldsContainer.style.display = 'none'
 
+            for (const field of modelInfo.columns) {
 
-            for (const field of Object.entries(modelInfo.columns)) {
-                const fieldItem = document.createElement('li')
-                fieldItem.className = 'field-item column-item'
-                fieldItem.textContent = field[0]
-                fieldItem.dataset.column = field[0]
-                fieldsContainer.appendChild(fieldItem)
+                const cardColumn = new CardColumn(field)
+
+                this.cardColumns.set(field.name, cardColumn)
+
+                fieldsContainer.appendChild(cardColumn.fieldItem)
             }
 
             card.appendChild(fieldsContainer)
 
-
-        }
-
-
-        if (!isCenter && !modelInfo.columns && data.fields && data.fields.length > 0) {
-
-
-            cardHeader.appendChild(fieldButton)
-
-            fieldsContainer.id = 'fields-' + id
-            fieldsContainer.style.display = 'none'
-            fieldsContainer.className = 'fields-container'
-
-            for (const field of data.fields) {
-                const fieldItem = document.createElement('li')
-                fieldItem.className = 'field-item'
-                fieldItem.textContent = field
-                fieldItem.dataset.column = field
-                fieldsContainer.appendChild(fieldItem)
-            }
-
-            card.appendChild(fieldsContainer)
 
         }
 
@@ -115,13 +111,20 @@ export class Card {
         cardContainer.appendChild(card)
         if (direction === 'right') cardContainer.appendChild(childCardContainer)
 
-        data.refs.forEach((ref: any) => {
+        model.refs?.forEach((ref) => {
 
-            const newCard = new Card(ref, false);
-            this.childCards.set(name, newCard)
-            childCardContainer.appendChild(newCard.cardContainer)
+            const newCard = new Card(ref, false, direction, this);
+            this.childCards.set(ref.model.name, newCard)
+
+            if (this.isCenter) {
+                const leftContainer = document.getElementById('left-nodes')!;
+                leftContainer.appendChild(newCard.cardContainer)
+            }
+            else childCardContainer.appendChild(newCard.cardContainer)
         })
 
+
+        if(!this.isCenter)this.showFieldsContainer(false)
     }
 
     reset() {
@@ -131,7 +134,6 @@ export class Card {
             f.classList.remove('selected')
         })
     }
-
 
     toggle() {
         if (this.fieldsHidden) {
@@ -166,6 +168,7 @@ export class Card {
         this.fieldButton.textContent = '⬆';
         this.fieldsHidden = false;
 
+        this.showFieldsContainer(true)
     }
 
     showFieldsContainer(isTrue: boolean) {
@@ -177,7 +180,8 @@ export class Card {
     }
 
 
-    showLineage(column: any, connect: { a: Element, b: Element }[] = [], preColumnDiv: Element | null) {
+    showLineage(column: string, connect: { a: Element, b: Element }[] = [], preColumnDiv: Element | null) {
+
         const columnDiv = this.fieldsContainer.querySelector(`[data-column="${column}"]`);
         columnDiv?.classList.add('selected');
 
@@ -195,25 +199,68 @@ export class Card {
             connect.push({ a: columnDiv, b: preColumnDiv })
         }
 
-        
+
+        if (this.direction === 'center' && columnDiv) {
+            // Define a recursive helper function to process a card and traverse its right-side children
+            const traverseRightCards = (card: Card, targetTable: string, targetColumn: string, currentColumnDiv: Element) => {
+                if (!card) return;
+
+                if (!card.isCenter) {
+                    card.showFieldsContainer(true);
+                    card.hideFields();
+                    currentColumnDiv?.classList.add('selected');
+                }
+
+                // 1. Process column data for the current card
+                Array.from(card.columnData.values())
+                    .filter(f => f.refs.some(c => c.table === targetTable && c.name === targetColumn))
+                    .forEach(coco => {
+                        const inoCa = card.cardColumns.get(coco.name);
+                        if (inoCa && currentColumnDiv) {
+                            inoCa.fieldItem.classList.add('selected');
+                            inoCa.fieldItem.classList.remove('hidden');
+                            currentColumnDiv.classList.remove('hidden');
+                            connect.push({ a: currentColumnDiv, b: inoCa.fieldItem });
+
+                            // 2. Recursively traverse further down the tree for any 'right' child cards,
+                            // passing the current card's table and the matched column name (coco.name) 
+                            // so the next level links against this newly matched field item!
+                            if (card.childCards) {
+                                card.childCards.forEach(innerCard => {
+                                    if (innerCard.direction === 'right') {
+                                        traverseRightCards(innerCard, card.table, coco.name, inoCa.fieldItem);
+                                    }
+                                });
+                            }
+                        }
+                    });
+            };
+
+            // Kick off the recursion starting directly from the center card's first-layer children
+            Array.from(this.childCards.values())
+                .filter(f => f.direction === 'right')
+                .forEach(innerCard => {
+                    traverseRightCards(innerCard, this.table, column, columnDiv);
+                });
+        }
 
         const columnLineages = this.columnData.get(column);
-        columnLineages?.forEach((lineage: string) => {
-            this.resolveLineage(lineage, connect, columnDiv);
+        columnLineages?.refs.forEach((col) => {
+            this.resolveLineage(col, connect, columnDiv);
         });
 
         return connect
     }
 
-    private resolveLineage(lineageString: string, connect: { a: Element; b: Element }[], columnDiv: Element | null) {
-        const lineageParts = lineageString.split('.');
-        const nextColumn = lineageParts.pop()?.replaceAll('"', '');
-        const tableName = lineageParts.join('.');
+    private resolveLineage(col: Column, connect: { a: Element; b: Element }[], columnDiv: Element | null) {
+
+        const nextColumn = col.name;
+        const tableName = col.table;
         const sanitizedTableName = tableName.replaceAll('"', '');
 
         if (!nextColumn) return;
 
-        const allCards = Card.card_stack;
+        const allCards = this.childCards;
         const targetCard = allCards.get(tableName) ?? allCards.get(sanitizedTableName);
 
 
@@ -222,15 +269,6 @@ export class Card {
             // Base case: We found the actual UI Card
             targetCard.showFieldsContainer(true);
             targetCard.showLineage(nextColumn, connect, columnDiv);
-        } else {
-            // Recursive case: CTE step — look up the intermediate CTE definition
-            const cteTable = this.cteColumnData.get(tableName) ?? this.cteColumnData.get(sanitizedTableName);
-            const cteColumns = cteTable?.get(nextColumn);
-
-            cteColumns?.forEach((nestedLineage: string) => {
-                // Recursively resolve through infinite levels of CTEs
-                this.resolveLineage(nestedLineage, connect, columnDiv);
-            });
         }
     }
 

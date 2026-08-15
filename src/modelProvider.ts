@@ -7,26 +7,16 @@ import * as fs from 'fs';
 import { execFile } from "child_process";
 
 import { logError, logInformation } from "./logging";
+import { Column, SqlModelInfo } from "./domain/domain";
 
-
-export interface TableInfo {
-    fullname: string;
-    name: string;
-    db?: string;
-    catalog?: string;
-    alias?: string;
-    fields: string[]
-}
-
-export class SqlModelInfo extends vscode.TreeItem {
+export class SqlModelInfoTree extends vscode.TreeItem implements SqlModelInfo {
     constructor(
         public name: string,
         public file_name: string,
         public file_path: string,
-        public table_names: TableInfo[],
-        public cte_names: TableInfo[],
-        public columns: Record<string, string[]>,
-        public cte_columns: Record<string, string[]>,
+        public table_names: string[],
+        public columns: Column[]
+        
     ) {
         super(name, vscode.TreeItemCollapsibleState.Collapsed)
 
@@ -39,7 +29,7 @@ export class SqlModelInfo extends vscode.TreeItem {
 }
 
 
-type SqlModelsResponse = Record<string, SqlModelInfo>;
+type SqlModelsResponse = Record<string, any>;
 
 
 export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
@@ -48,7 +38,7 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
     readonly onDidChangeTreeData: vscode.Event<vscode.TreeItem | undefined | void> = this._onDidChangeTreeData.event;
 
     private treeItems: Map<string, vscode.TreeItem> = new Map()
-    models: Map<string, SqlModelInfo> = new Map()
+    models: Map<string, SqlModelInfoTree> = new Map()
 
 
     private makeTreeItem(label: string, collapsed: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.Collapsed): vscode.TreeItem {
@@ -63,7 +53,7 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
     }
 
 
-    getTreeItem(element: SqlModelInfo): vscode.TreeItem | Thenable<vscode.TreeItem> {
+    getTreeItem(element: SqlModelInfoTree): vscode.TreeItem | Thenable<vscode.TreeItem> {
         return element
     }
     getChildren(element?: vscode.TreeItem): vscode.ProviderResult<vscode.TreeItem[]> {
@@ -83,14 +73,12 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
 
         this.models = new Map(Object.entries(models).map(m =>
             [vscode.Uri.file(m[0]).fsPath,
-            new SqlModelInfo(
+            new SqlModelInfoTree(
                 m[1].name,
                 m[1].file_name,
                 m[1].file_path,
                 m[1].table_names,
-                m[1].cte_names,
-                m[1].columns,
-                m[1].cte_columns
+                m[1].columns
             )]))
 
         this._onDidChangeTreeData.fire()
@@ -183,7 +171,7 @@ class ModelProvideDefinition implements vscode.DefinitionProvider {
         const refModel = targetRefModels[0]
 
 
-        const refModels = Array.from(this.modelProvider.models.values()).filter((m) => m.table_names.some((dp) => dp.fullname === fqn))
+        const refModels = Array.from(this.modelProvider.models.values()).filter((m) => m.table_names.some((dp) => dp === fqn))
 
         if (refModel) refModels.push(refModel)
 
@@ -191,7 +179,9 @@ class ModelProvideDefinition implements vscode.DefinitionProvider {
         if (refModels.length === 0) {
             const docModel = this.modelProvider.models.get(document.uri.fsPath)
 
+            /*
             if (docModel) {
+                
                 const cte = docModel?.cte_names.find(cte => cte.fullname === tableName || cte.alias === tableName)
                 if (cte) {
 
@@ -208,6 +198,7 @@ class ModelProvideDefinition implements vscode.DefinitionProvider {
                     }).filter(f => f !== undefined)
                     return references
                 }
+                    
 
                 const tableAlias = tableName.split('.')[0]
                 const splitField = tableName.split('.')[1]
@@ -252,13 +243,14 @@ class ModelProvideDefinition implements vscode.DefinitionProvider {
                         references.push(...resolvedLocations)
 
                     }
-
                     return references
+                       
 
                 }
 
 
             }
+                */
         }
 
 
