@@ -4,11 +4,11 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any, Union, Set, Iterable
 from sqlglot.errors import ParseError
 from sqlglot import exp
-from classes import SqlModelInfo, TableInfo, ColRef, RawModel
+from classes import SqlModelInfo, TableInfo, ColRef, Ref, RawModel
 import json
 import logging
 from graphlib import TopologicalSorter
-
+from itertools import chain
 
 
 def sort(raw_models: List[RawModel]):
@@ -134,20 +134,20 @@ class ModelParser:
 
         for cte in query.find_all(exp.CTE):
             for sq in cte.find_all(exp.Subquery):
-                sub_refs = self.parseSelect(sq, table_column_map)
-                table_column_map[sq.alias_or_name] = sub_refs
+                sub_lineage = self.parseSelect(cte.alias_or_name,sq, table_column_map)
+                table_column_map[sq.alias_or_name] = sub_lineage
 
-            cte_refs = self.parseSelect(cte, table_column_map)
-            table_column_map[cte.alias_or_name] = cte_refs
+            cte_lineage = self.parseSelect(cte.alias_or_name,cte, table_column_map)
+            table_column_map[cte.alias_or_name] = cte_lineage
 
         for sq in uncte_query.find_all(exp.Subquery):
-            sub_refs = self.parseSelect(sq, table_column_map)
-            table_column_map[sq.alias_or_name] = sub_refs
+            sub_lineage = self.parseSelect(sq.alias_or_name,sq, table_column_map)
+            table_column_map[sq.alias_or_name] = sub_lineage
 
         cte_names: Set[str] = {cte.alias_or_name for cte in query.ctes} if hasattr(query, 'ctes') else set()
         sq_aliases: Set[str] = {sq.alias_or_name for sq in query.find_all(exp.Subquery)}
 
-        columns = self.parseSelect(uncte_query, table_column_map)
+        columns = self.parseSelect(model.name, uncte_query, table_column_map)
 
         truncated_columns = self.truncateColumns(columns, model.name)
 
@@ -165,18 +165,19 @@ class ModelParser:
             name=model.name,
             file_name=model.file_name, 
             file_path=model.path,
-            columns=truncated_columns,
+            columns=columns,
             table_names=table_names
         ), self.unmatched_columns]
 
 
-    def traverse(self, column: ColRef, truncated_columns: Set[ColRef]):
+    def traverse(self, column: Ref, truncated_columns: Set[ColRef]):
 
         if len(column.refs) > 0:
             for col in column.refs:
                 self.traverse(col, truncated_columns)
             return truncated_columns
-        truncated_columns.add(column)
+        if isinstance(column, ColRef):
+            truncated_columns.add(column)
         return truncated_columns
 
     def truncateColumns(self, columns: List['ColRef'], model_name):
@@ -232,7 +233,7 @@ class ModelParser:
 
         return [ColRef(name=column.alias_or_name, table=table_name)]
 
-    def parseSelect(self, query: Union[exp.Query, exp.CTE, exp.Subquery], all_table_map: Dict[str, List['ColRef']]):
+    def parseSelect(self, name:str, query: Union[exp.Query, exp.CTE, exp.Subquery], all_table_map: Dict[str, List['ColRef']]):
         # Unwrap CTEs or Subqueries to inspect the actual inner query
         if not isinstance(query, (exp.Query, exp.CTE, exp.Subquery)):
                     return []
@@ -241,15 +242,15 @@ class ModelParser:
         # FIX: Handle UNION queries by parsing both sides and zipping the lineage
         if isinstance(inner_query, exp.Union):
             # sqlglot Unions use `.this` for the left query and `.expression` for the right
-            left_cols = self.parseSelect(inner_query.this, all_table_map)
-            right_cols = self.parseSelect(inner_query.expression, all_table_map)
+            left_lineage = self.parseSelect('union', inner_query.this, all_table_map)
+            right_lineage = self.parseSelect('union', inner_query.expression, all_table_map)
 
-            combined_columns = []
-            for i, l_col in enumerate(left_cols):
+            combined_columns : List[ColRef] = []
+            for i, l_col in enumerate(left_lineage):
                 # Combine the lineage trees from both branches of the UNION
                 refs = [l_col]
-                if i < len(right_cols):
-                    refs.append(right_cols[i])
+                if i < len(right_lineage):
+                    refs.append(right_lineage[i])
 
                 combined_columns.append(
                     ColRef(name=l_col.name, table=query.alias_or_name or "UNION", refs=tuple(refs))
@@ -262,32 +263,72 @@ class ModelParser:
             table.alias_or_name: '.'.join([n for n in [table.db, table.catalog, table.name] if n != ''])
             for table in tables
         }
-        all_columns: List['ColRef'] = []
+        #all_columns: List['ColRef'] = []
 
-        
+        all_lineages: List[ColRef] = []
 
         for expr in query.selects:
             columns: List['ColRef'] = []
 
             if isinstance(expr, exp.Star):
                 exp_cols = self.expand_full_wildcard(expr, tables, all_table_map)
-                all_columns.extend(exp_cols)
+                all_lineages.extend(exp_cols)
                 continue
 
             if isinstance(expr, exp.Column):
-                all_columns.extend(self.parseColumn(expr, table_map, all_table_map))
+                all_lineages.extend(self.parseColumn(expr, table_map, all_table_map))
                 continue
             else:
-                for column in expr.find_all(exp.Column):
-                    columns.extend(self.parseColumn(column, table_map, all_table_map))
+                looped = self.loop_column_lineage(expr, table_map, all_table_map)
+                all_lineages.append(ColRef(name=expr.alias_or_name, table=name, refs=tuple(looped)))
+                #for column in expr.find_all(exp.Column):
+                #    
+                #    columns.extend(self.parseColumn(column, table_map, all_table_map))
 
             if expr.alias_or_name == '*':
-                all_columns.extend(columns)
-            else: 
-                all_columns.append(ColRef(name=expr.alias_or_name, table=query.alias_or_name, refs=tuple(columns)))
+                all_lineages.extend(columns)
+            #else: 
+            #    all_lineages.append(ColRef(name=expr.alias_or_name, table=query.alias_or_name, refs=tuple(columns)))
 
-        return all_columns
+        return all_lineages
 
+    def loop_column_lineage(self, expr, table_map, all_table_map) -> List[Ref|ColRef]:
+        if isinstance(expr, exp.Column):
+            return [col for col in self.parseColumn(expr, table_map, all_table_map)]
+        elif isinstance(expr, (exp.Alias, exp.Paren)):
+            return self.loop_column_lineage(expr.args['this'], table_map, all_table_map)
+        elif isinstance(expr, exp.DataType):
+            return [Ref(name=str(expr.this.value))]
+        elif isinstance(expr, exp.Literal):
+            return [Ref(name=str(f'literal:{expr.this}'))]
+        elif isinstance(expr, exp.Anonymous):
+            return [
+                    Ref( name=expr.name,
+                    refs=tuple(
+                        chain.from_iterable(
+                            self.loop_column_lineage(v, table_map, all_table_map)
+                            for v in expr.args.values()
+                            if v is not None and not isinstance(v, exp.Identifier)
+                    )
+                ),
+            )
+        ]
+        elif isinstance(expr, exp.Expr):
+            return [
+                    Ref(
+                name=expr.key,
+                refs=tuple(
+                    chain.from_iterable(
+                        self.loop_column_lineage(v, table_map, all_table_map)
+                        for v in expr.args.values()
+                        if v is not None and not isinstance(v, exp.Identifier)
+                    )
+                ),
+            )
+        ]
+        elif isinstance(expr, list):
+            return list(chain.from_iterable(self.loop_column_lineage(i, table_map, all_table_map) for i in expr))
+        return []
 
     def expand_single_wildcard(self, table_name: str, table_map: dict, table_column_map: Dict[str, List['ColRef']]):
         table_name = table_map.get(table_name, table_name)

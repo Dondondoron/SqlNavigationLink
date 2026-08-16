@@ -1,6 +1,6 @@
 
-from pydantic import BaseModel, ConfigDict
-from typing import Optional, List, Tuple
+from pydantic import BaseModel, ConfigDict, model_serializer
+from typing import Optional, List, Tuple, Dict, Any
 from dataclasses import dataclass
 from sqlglot import exp
 
@@ -33,8 +33,22 @@ class RawModel:
     query:exp.Query
     tables:set
 
-class ColRef(BaseModel):
+class Ref(BaseModel):
     model_config = {"frozen": True}
     name: str
+    refs: Tuple["ColRef|Ref", ...] = ()
+
+class ColRef(Ref):
     table: str
-    refs: Tuple["ColRef", ...] = ()
+
+    @model_serializer(mode="wrap")
+    def serialize_model(self, handler) -> Dict[str, Any]:
+        # Let Pydantic do its standard serialization first
+        data = handler(self)
+        
+        # Explicitly build the dictionary in your desired key order
+        return {
+            "name": data.get("name"),
+            "table": data.get("table"),
+            "refs": data.get("refs")
+        }
