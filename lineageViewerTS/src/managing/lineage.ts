@@ -20,7 +20,7 @@ const lineageManager = new LineageManager()
 const zoomer = Zoomer.getInstance()
 
 
-const eventListener = (e: Event) => {
+const eventListener = (e: MouseEvent) => {
 
     if (!(e.target instanceof HTMLElement)) return;
 
@@ -73,11 +73,9 @@ const eventListener = (e: Event) => {
     if (columnItem instanceof HTMLElement) {
 
         const cardContainer = e.target.closest('.card_container') as any
-
-
         const column = columnItem.dataset.column
-
-        lineageManager.showLineageOnCard(cardContainer?.dataset.id!, column)
+     
+        lineageManager.showLineageOnCard(cardContainer?.dataset.id!, column, e.ctrlKey)
 
         return;
 

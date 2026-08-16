@@ -1,11 +1,16 @@
 import { Column, ModelLineage, SqlModelInfo } from "../domain/domain"
 import { Utility } from "../utils/Utility"
+import { ColumnDetailLineageCreator } from "./CreateColumnDetailedLineage"
 
 
 export class CardColumn implements Column {
+    
     name: string
     table: string
     refs: CardColumn[]
+    canvas?: HTMLDivElement
+
+    expanded?:boolean = false
 
     constructor(column: Column,
         public fieldItem = document.createElement('li')
@@ -61,7 +66,7 @@ export class Card {
         card.className = 'node-card' + (isCenter ? ' center' : '');
         const modelInfo = model.model
         const name = modelInfo.name
-        this.table = name
+        this.table = name.replaceAll('"', '')
 
         cardContainer.dataset.card = name
         cardContainer.dataset.id = id
@@ -114,7 +119,7 @@ export class Card {
         model.refs?.forEach((ref) => {
 
             const newCard = new Card(ref, false, direction, this);
-            this.childCards.set(ref.model.name, newCard)
+            this.childCards.set(ref.model.name.replaceAll('"', ''), newCard)
 
             if (this.isCenter) {
                 const leftContainer = document.getElementById('left-nodes')!;
@@ -124,7 +129,7 @@ export class Card {
         })
 
 
-        if(!this.isCenter)this.showFieldsContainer(false)
+        if (!this.isCenter) this.showFieldsContainer(false)
     }
 
     reset() {
@@ -132,6 +137,14 @@ export class Card {
 
         columnDivs.forEach(f => {
             f.classList.remove('selected')
+        })
+
+        this.cardColumns.forEach(cc=>{
+            if(cc.canvas){
+                cc.canvas.replaceWith(cc.fieldItem)
+                cc.canvas = undefined
+                cc.expanded = false
+            }
         })
     }
 
@@ -180,6 +193,38 @@ export class Card {
     }
 
 
+    showFullLineage(column: string, connect: { a: Element, b: Element }[] = [], preColumnDiv: Element | null) {
+
+
+        this.showFieldsContainer(true)
+
+        const cardColumn = this.columnData.get(column)
+
+        
+        if (cardColumn) {
+
+            const next_targets = new ColumnDetailLineageCreator(this, cardColumn).render(connect, preColumnDiv)
+
+            if (next_targets) {
+                Array.from(next_targets.entries()).forEach(t => {
+
+                    const child = this.childCards.get(t[0])
+                    
+                    if(child){
+                        t[1].forEach(ct=>{
+
+                            child.showFullLineage(ct.column, connect, ct.element)
+                        })
+                    }
+                })
+            }
+
+        }
+
+
+        return connect
+    }
+
     showLineage(column: string, connect: { a: Element, b: Element }[] = [], preColumnDiv: Element | null) {
 
         const columnDiv = this.fieldsContainer.querySelector(`[data-column="${column}"]`);
@@ -211,9 +256,13 @@ export class Card {
                     currentColumnDiv?.classList.add('selected');
                 }
 
+                const leafs = this.getLeafColumns(Array.from(card.columnData.values()))
+
                 // 1. Process column data for the current card
-                Array.from(card.columnData.values())
-                    .filter(f => f.refs.some(c => c.table === targetTable && c.name === targetColumn))
+                Array.from(leafs)
+                    .filter(f => {
+                        return f.table === targetTable && f.name === targetColumn
+                    })
                     .forEach(coco => {
                         const inoCa = card.cardColumns.get(coco.name);
                         if (inoCa && currentColumnDiv) {
@@ -245,11 +294,33 @@ export class Card {
         }
 
         const columnLineages = this.columnData.get(column);
-        columnLineages?.refs.forEach((col) => {
-            this.resolveLineage(col, connect, columnDiv);
-        });
+
+
+
+        if (columnLineages) {
+            const leafColumns = this.getLeafColumns([columnLineages])
+
+            leafColumns.forEach((col) => {
+                this.resolveLineage(col, connect, columnDiv);
+            })
+
+        }
+        ;
 
         return connect
+    }
+
+
+    private getLeafColumns(columndata: Column[], cols: Column[] = []) {
+        columndata.forEach(cd => {
+            if (cd.refs.length === 0 && cd.table) {
+                cols.push(cd)
+            } else {
+                this.getLeafColumns(cd.refs, cols)
+            }
+
+        })
+        return cols
     }
 
     private resolveLineage(col: Column, connect: { a: Element; b: Element }[], columnDiv: Element | null) {

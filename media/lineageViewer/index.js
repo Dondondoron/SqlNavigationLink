@@ -34,6 +34,67 @@
     }
   };
 
+  // lineageViewerTS/src/managing/CreateColumnDetailedLineage.ts
+  function createTarget(column, element) {
+    return {
+      column,
+      element
+    };
+  }
+  var ColumnDetailLineageCreator = class {
+    constructor(card, column) {
+      this.card = card;
+      this.column = column;
+    }
+    render(connect, preColumnDiv) {
+      const nextTargets = /* @__PURE__ */ new Map();
+      const canvas = document.createElement("div");
+      canvas.classList.add("lineage-column-container");
+      const cardColumn = this.card.cardColumns.get(this.column.name);
+      if (!cardColumn) return;
+      if (cardColumn.expanded) {
+        if (preColumnDiv) connect.push({ a: cardColumn.fieldItem, b: preColumnDiv });
+        return;
+      }
+      cardColumn.fieldItem.replaceWith(canvas);
+      cardColumn.fieldItem.classList.remove("hidden");
+      cardColumn.canvas = canvas;
+      function recurse(col, element, prevHeader, rootElement) {
+        const innerCanvas = document.createElement("div");
+        innerCanvas.classList.add("lineage-column-container", "full-width");
+        innerCanvas.style.flexDirection = "row-reverse";
+        const header = rootElement ? rootElement : document.createElement("li");
+        header.textContent = col.name;
+        header?.classList.add("selected");
+        if (prevHeader) connect.push({ a: header, b: prevHeader });
+        const childContainer = document.createElement("div");
+        childContainer.classList.add("child_card_container");
+        element.appendChild(innerCanvas);
+        innerCanvas.appendChild(header);
+        innerCanvas.appendChild(childContainer);
+        if (col.refs.length === 0) {
+          header.style.marginLeft = "0px";
+        }
+        if (col.refs.length === 0 && col.table) {
+          if (nextTargets.has(col.table))
+            nextTargets.get(col.table)?.add(createTarget(col.name, header));
+          else {
+            nextTargets.set(col.table, /* @__PURE__ */ new Set([createTarget(col.name, header)]));
+          }
+        } else if (col.refs.length > 0 && col.table && !rootElement) {
+          header.textContent = col.table + "." + col.name;
+        } else if (col.refs.length === 0 && !col.table) {
+        }
+        col.refs.forEach((r) => {
+          recurse(r, childContainer, header);
+        });
+      }
+      recurse(this.column, canvas, preColumnDiv, cardColumn.fieldItem);
+      cardColumn.expanded = true;
+      return nextTargets;
+    }
+  };
+
   // lineageViewerTS/src/managing/Card.ts
   var CardColumn = class {
     constructor(column, fieldItem = document.createElement("li")) {
@@ -46,10 +107,11 @@
       fieldItem.dataset.column = column.name;
       fieldItem.title = column.table + "." + column.name;
     }
-    fieldItem;
     name;
     table;
     refs;
+    canvas;
+    expanded = false;
   };
   var Card = class _Card {
     constructor(model, isCenter = false, direction = "left", parent = void 0, cardContainer = document.createElement("div"), card = document.createElement("div"), cardHeader = document.createElement("header"), titleSpan = document.createElement("span"), fieldButton = document.createElement("button"), fieldsContainer = document.createElement("ul"), childCards = /* @__PURE__ */ new Map()) {
@@ -69,7 +131,7 @@
       card.className = "node-card" + (isCenter ? " center" : "");
       const modelInfo = model.model;
       const name = modelInfo.name;
-      this.table = name;
+      this.table = name.replaceAll('"', "");
       cardContainer.dataset.card = name;
       cardContainer.dataset.id = id;
       titleSpan.textContent = name;
@@ -99,7 +161,7 @@
       if (direction === "right") cardContainer.appendChild(childCardContainer);
       model.refs?.forEach((ref) => {
         const newCard = new _Card(ref, false, direction, this);
-        this.childCards.set(ref.model.name, newCard);
+        this.childCards.set(ref.model.name.replaceAll('"', ""), newCard);
         if (this.isCenter) {
           const leftContainer = document.getElementById("left-nodes");
           leftContainer.appendChild(newCard.cardContainer);
@@ -107,13 +169,6 @@
       });
       if (!this.isCenter) this.showFieldsContainer(false);
     }
-    cardContainer;
-    card;
-    cardHeader;
-    titleSpan;
-    fieldButton;
-    fieldsContainer;
-    childCards;
     static card_stack = /* @__PURE__ */ new Map();
     parent;
     id;
@@ -129,6 +184,13 @@
       const columnDivs = this.fieldsContainer.querySelectorAll(".field-item");
       columnDivs.forEach((f) => {
         f.classList.remove("selected");
+      });
+      this.cardColumns.forEach((cc) => {
+        if (cc.canvas) {
+          cc.canvas.replaceWith(cc.fieldItem);
+          cc.canvas = void 0;
+          cc.expanded = false;
+        }
       });
     }
     toggle() {
@@ -161,6 +223,24 @@
       this.fieldButton.textContent = isTrue ? "\u2B06" : "\u2261";
       this.containerHidden = isTrue;
     }
+    showFullLineage(column, connect = [], preColumnDiv) {
+      this.showFieldsContainer(true);
+      const cardColumn = this.columnData.get(column);
+      if (cardColumn) {
+        const next_targets = new ColumnDetailLineageCreator(this, cardColumn).render(connect, preColumnDiv);
+        if (next_targets) {
+          Array.from(next_targets.entries()).forEach((t) => {
+            const child = this.childCards.get(t[0]);
+            if (child) {
+              t[1].forEach((ct) => {
+                child.showFullLineage(ct.column, connect, ct.element);
+              });
+            }
+          });
+        }
+      }
+      return connect;
+    }
     showLineage(column, connect = [], preColumnDiv) {
       const columnDiv = this.fieldsContainer.querySelector(`[data-column="${column}"]`);
       columnDiv?.classList.add("selected");
@@ -183,7 +263,10 @@
             card.hideFields();
             currentColumnDiv?.classList.add("selected");
           }
-          Array.from(card.columnData.values()).filter((f) => f.refs.some((c) => c.table === targetTable && c.name === targetColumn)).forEach((coco) => {
+          const leafs = this.getLeafColumns(Array.from(card.columnData.values()));
+          Array.from(leafs).filter((f) => {
+            return f.table === targetTable && f.name === targetColumn;
+          }).forEach((coco) => {
             const inoCa = card.cardColumns.get(coco.name);
             if (inoCa && currentColumnDiv) {
               inoCa.fieldItem.classList.add("selected");
@@ -205,10 +288,24 @@
         });
       }
       const columnLineages = this.columnData.get(column);
-      columnLineages?.refs.forEach((col) => {
-        this.resolveLineage(col, connect, columnDiv);
-      });
+      if (columnLineages) {
+        const leafColumns = this.getLeafColumns([columnLineages]);
+        leafColumns.forEach((col) => {
+          this.resolveLineage(col, connect, columnDiv);
+        });
+      }
+      ;
       return connect;
+    }
+    getLeafColumns(columndata, cols = []) {
+      columndata.forEach((cd) => {
+        if (cd.refs.length === 0 && cd.table) {
+          cols.push(cd);
+        } else {
+          this.getLeafColumns(cd.refs, cols);
+        }
+      });
+      return cols;
     }
     resolveLineage(col, connect, columnDiv) {
       const nextColumn = col.name;
@@ -402,7 +499,7 @@
         rightContainer.innerHTML = '<div class="empty-state">None</div>';
       }
     }
-    showLineageOnCard(cardId, column) {
+    showLineageOnCard(cardId, column, detailed = false) {
       const focusCard = Card.card_stack.get(cardId);
       if (focusCard && focusCard.isCenter) {
         document.querySelectorAll(".field-item").forEach((c) => {
@@ -412,7 +509,7 @@
           card.reset();
           if (card !== this.centerCard) card.showFieldsContainer(false);
         });
-        const connections = focusCard?.showLineage(column, [], null);
+        const connections = detailed ? focusCard?.showFullLineage(column, [], null) : focusCard?.showLineage(column, [], null);
         this.connections = connections;
         this.paintConnections(connections);
       }
@@ -435,7 +532,7 @@
         const fromY = (rectA.top + rectA.height / 2 - svgRect.top) / scale;
         const toX = (rectB.left - svgRect.left) / scale;
         const toY = (rectB.top + rectB.height / 2 - svgRect.top) / scale;
-        const pathData = _LineageManager.createHorizontalCurvedPath(fromX, fromY, toX, toY);
+        const pathData = _LineageManager.createHorizontalCurvedPathCooooler(fromX, fromY, toX, toY);
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
         path.setAttribute("d", pathData);
         path.setAttribute("stroke-width", String(2 / scale));
@@ -465,6 +562,90 @@
       const minCurve = 20;
       const curve = Math.max(baseCurve / ((dx - 50) / 250 + 1), minCurve) * lerped;
       return `M ${startX},${startY} C ${startX + curve},${startY} ${endX - curve},${endY} ${endX},${endY}`;
+    }
+    static createHorizontalCurvedPathEasy(fromX, fromY, toX, toY) {
+      if (toX < fromX) {
+        [fromX, toX] = [toX, fromX];
+        [fromY, toY] = [toY, fromY];
+      }
+      const deltaX = toX - fromX;
+      const deltaY = toY - fromY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      if (distance < 1) return `M ${fromX},${fromY}`;
+      const curve = Math.min(Math.max(deltaX * 0.1, 30), 150);
+      return `M ${fromX},${fromY} C ${fromX + curve},${fromY} ${toX - curve},${toY} ${toX},${toY}`;
+    }
+    static createHorizontalCurvedPathThree(fromX, fromY, toX, toY) {
+      if (toX < fromX) {
+        [fromX, toX] = [toX, fromX];
+        [fromY, toY] = [toY, fromY];
+      }
+      const deltaX = toX - fromX;
+      const deltaY = toY - fromY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      const distanceY = Math.sqrt(deltaY * deltaY);
+      if (distance < 1) return `M ${fromX},${fromY}`;
+      const curve = Math.min(Math.max(deltaX * 0.35, 30), 150);
+      const ctrl1X = fromX + curve * 2;
+      const ctrl1Y = fromY;
+      const ctrl2X = toX - curve;
+      const ctrl2Y = toY;
+      return `M ${fromX},${fromY} C ${ctrl1X},${ctrl1Y} ${ctrl2X},${ctrl2Y} ${toX},${toY}`;
+    }
+    static createHorizontalCurvedPathCool(fromX, fromY, toX, toY) {
+      if (toX < fromX) {
+        [fromX, toX] = [toX, fromX];
+        [fromY, toY] = [toY, fromY];
+      }
+      const deltaX = toX - fromX;
+      const deltaY = toY - fromY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      if (distance < 1) return `M ${fromX},${fromY}`;
+      const curve = Math.min(Math.max(deltaX * 0.35, 30), 150);
+      const ctrl1X = fromX + curve * 0.2;
+      const ctrl1Y = fromY;
+      const ctrl2X = toX;
+      let ctrl2Y = toY;
+      const diffY = toY - fromY;
+      const threshold = 10;
+      if (Math.abs(diffY) <= threshold) {
+        return `M ${fromX},${fromY} L ${toX},${toY}`;
+      }
+      if (Math.abs(diffY) <= threshold) {
+        ctrl2Y = toY;
+      } else if (diffY > 0) {
+        ctrl2Y = toY - curve;
+      } else {
+        ctrl2Y = toY + curve;
+      }
+      return `M ${fromX},${fromY} C ${ctrl1X},${ctrl1Y} ${ctrl2X},${ctrl2Y} ${toX},${toY}`;
+    }
+    static createHorizontalCurvedPathCooooler(fromX, fromY, toX, toY) {
+      if (toX < fromX) {
+        [fromX, toX] = [toX, fromX];
+        [fromY, toY] = [toY, fromY];
+      }
+      const deltaX = toX - fromX;
+      const deltaY = toY - fromY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      if (distance < 1) return `M ${fromX},${fromY}`;
+      const curve = Math.min(Math.max(deltaX * 0.35, 30), 150);
+      const ctrl1X = fromX + curve * 0.2;
+      const ctrl1Y = fromY;
+      const diffY = toY - fromY;
+      const threshold = 10;
+      let ctrl2X = toX;
+      let ctrl2Y = toY;
+      if (Math.abs(diffY) <= threshold) {
+        return `M ${fromX},${fromY} L ${toX},${toY}`;
+        ctrl2X = toX - curve;
+        ctrl2Y = toY;
+      } else {
+        const verticalSign = diffY > 0 ? -1 : 1;
+        ctrl2Y = toY + curve * 0.8 * verticalSign;
+        ctrl2X = toX - curve * 0.2;
+      }
+      return `M ${fromX},${fromY} C ${ctrl1X},${ctrl1Y} ${ctrl2X},${ctrl2Y} ${toX},${toY}`;
     }
   };
 
@@ -516,7 +697,7 @@
     if (columnItem instanceof HTMLElement) {
       const cardContainer = e.target.closest(".card_container");
       const column = columnItem.dataset.column;
-      lineageManager.showLineageOnCard(cardContainer?.dataset.id, column);
+      lineageManager.showLineageOnCard(cardContainer?.dataset.id, column, e.ctrlKey);
       return;
     }
     const card = e.target.closest(".node-card");
@@ -554,91 +735,309 @@
   document.addEventListener("click", eventListener);
 
   // lineageViewerTS/src/test_data/test_data.ts
-  var testDataReverse = {
+  var testData = {
     "centerModel": {
       "model": {
         "collapsibleState": 1,
-        "label": "recent_prices",
-        "name": "recent_prices",
-        "file_name": "recent_prices.sql",
-        "file_path": "E:\\Uibi\\sqlmesh\\project_one\\models\\00_mock\\recent_prices.sql",
+        "label": '"holdings_recent_change"',
+        "name": '"holdings_recent_change"',
+        "file_name": "holdings_recent_changes.sql",
+        "file_path": "e:\\Uibi\\sqlmesh\\project_one\\models\\10_open\\holdings_recent_changes.sql",
         "table_names": [
-          "bors_prices"
+          "recent_holdings_filter_weekends"
         ],
         "columns": [
           {
-            "name": "trade_date",
-            "table": "recent_prices",
+            "name": "profitpercent",
+            "table": '"holdings_recent_change"',
             "refs": [
               {
-                "name": "trade_date",
-                "table": "bors_prices",
+                "name": "profitpercent",
+                "table": "recent_holdings_filter_weekends",
                 "refs": []
               }
             ]
           },
           {
-            "name": "ins_id",
-            "table": "recent_prices",
+            "name": "name",
+            "table": '"holdings_recent_change"',
             "refs": [
               {
-                "name": "ins_id",
-                "table": "bors_prices",
+                "name": "name",
+                "table": "recent_holdings_filter_weekends",
                 "refs": []
               }
             ]
           },
           {
-            "name": "high_price",
-            "table": "recent_prices",
+            "name": "orderbookid",
+            "table": '"holdings_recent_change"',
             "refs": [
               {
-                "name": "high_price",
-                "table": "bors_prices",
+                "name": "orderbookid",
+                "table": "recent_holdings_filter_weekends",
                 "refs": []
               }
             ]
           },
           {
-            "name": "low_price",
-            "table": "recent_prices",
+            "name": "lag_profitpercent",
+            "table": '"holdings_recent_change"',
             "refs": [
               {
-                "name": "low_price",
-                "table": "bors_prices",
-                "refs": []
+                "name": "window",
+                "refs": [
+                  {
+                    "name": "lag",
+                    "refs": [
+                      {
+                        "name": "profitpercent",
+                        "table": "recent_holdings_filter_weekends",
+                        "refs": []
+                      },
+                      {
+                        "name": "neg",
+                        "refs": [
+                          {
+                            "name": "literal:1",
+                            "refs": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "null",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "orderbookid",
+                    "table": "recent_holdings_filter_weekends",
+                    "refs": []
+                  },
+                  {
+                    "name": "order",
+                    "refs": [
+                      {
+                        "name": "ordered",
+                        "refs": [
+                          {
+                            "name": "date",
+                            "table": "recent_holdings_filter_weekends",
+                            "refs": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             ]
           },
           {
-            "name": "open_price",
-            "table": "recent_prices",
+            "name": "lag_time",
+            "table": '"holdings_recent_change"',
             "refs": [
               {
-                "name": "open_price",
-                "table": "bors_prices",
-                "refs": []
+                "name": "window",
+                "refs": [
+                  {
+                    "name": "lag",
+                    "refs": [
+                      {
+                        "name": "date",
+                        "table": "recent_holdings_filter_weekends",
+                        "refs": []
+                      },
+                      {
+                        "name": "neg",
+                        "refs": [
+                          {
+                            "name": "literal:1",
+                            "refs": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "null",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "orderbookid",
+                    "table": "recent_holdings_filter_weekends",
+                    "refs": []
+                  },
+                  {
+                    "name": "order",
+                    "refs": [
+                      {
+                        "name": "ordered",
+                        "refs": [
+                          {
+                            "name": "date",
+                            "table": "recent_holdings_filter_weekends",
+                            "refs": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             ]
           },
           {
-            "name": "close_price",
-            "table": "recent_prices",
+            "name": "lag_2_profitpercent",
+            "table": '"holdings_recent_change"',
             "refs": [
               {
-                "name": "close_price",
-                "table": "bors_prices",
-                "refs": []
+                "name": "window",
+                "refs": [
+                  {
+                    "name": "lag",
+                    "refs": [
+                      {
+                        "name": "profitpercent",
+                        "table": "recent_holdings_filter_weekends",
+                        "refs": []
+                      },
+                      {
+                        "name": "neg",
+                        "refs": [
+                          {
+                            "name": "literal:2",
+                            "refs": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "null",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "orderbookid",
+                    "table": "recent_holdings_filter_weekends",
+                    "refs": []
+                  },
+                  {
+                    "name": "order",
+                    "refs": [
+                      {
+                        "name": "ordered",
+                        "refs": [
+                          {
+                            "name": "date",
+                            "table": "recent_holdings_filter_weekends",
+                            "refs": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             ]
           },
           {
-            "name": "volume",
-            "table": "recent_prices",
+            "name": "lag_2_time",
+            "table": '"holdings_recent_change"',
             "refs": [
               {
-                "name": "volume",
-                "table": "bors_prices",
+                "name": "window",
+                "refs": [
+                  {
+                    "name": "lag",
+                    "refs": [
+                      {
+                        "name": "date",
+                        "table": "recent_holdings_filter_weekends",
+                        "refs": []
+                      },
+                      {
+                        "name": "neg",
+                        "refs": [
+                          {
+                            "name": "literal:2",
+                            "refs": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "null",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "orderbookid",
+                    "table": "recent_holdings_filter_weekends",
+                    "refs": []
+                  },
+                  {
+                    "name": "order",
+                    "refs": [
+                      {
+                        "name": "ordered",
+                        "refs": [
+                          {
+                            "name": "date",
+                            "table": "recent_holdings_filter_weekends",
+                            "refs": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "rn",
+            "table": '"holdings_recent_change"',
+            "refs": [
+              {
+                "name": "window",
+                "refs": [
+                  {
+                    "name": "rownumber",
+                    "refs": []
+                  },
+                  {
+                    "name": "orderbookid",
+                    "table": "recent_holdings_filter_weekends",
+                    "refs": []
+                  },
+                  {
+                    "name": "order",
+                    "refs": [
+                      {
+                        "name": "ordered",
+                        "refs": [
+                          {
+                            "name": "date",
+                            "table": "recent_holdings_filter_weekends",
+                            "refs": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "latest_time",
+            "table": '"holdings_recent_change"',
+            "refs": [
+              {
+                "name": "date",
+                "table": "recent_holdings_filter_weekends",
                 "refs": []
               }
             ]
@@ -646,59 +1045,740 @@
         ],
         "command": {
           "command": "sql-nav-link.openPath",
-          "title": "recent_prices",
+          "title": '"holdings_recent_change"',
           "arguments": [
-            "E:\\Uibi\\sqlmesh\\project_one\\models\\00_mock\\recent_prices.sql"
+            "e:\\Uibi\\sqlmesh\\project_one\\models\\10_open\\holdings_recent_changes.sql"
           ]
         }
       },
       "refs": [
         {
           "model": {
-            "name": "bors_prices",
-            "file_name": "",
-            "file_path": "",
-            "table_names": [],
+            "collapsibleState": 1,
+            "label": '"recent_holdings_filter_weekends"',
+            "name": '"recent_holdings_filter_weekends"',
+            "file_name": "recent_holdings_filter_weekends.sql",
+            "file_path": "e:\\Uibi\\sqlmesh\\project_one\\models\\05_external\\recent_holdings_filter_weekends.sql",
+            "table_names": [
+              "recent_holdings"
+            ],
             "columns": [
               {
-                "name": "trade_date",
-                "table": "bors_prices",
-                "refs": []
+                "name": "accountid",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "accountid",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
               },
               {
-                "name": "ins_id",
-                "table": "bors_prices",
-                "refs": []
-              },
-              {
-                "name": "high_price",
-                "table": "bors_prices",
-                "refs": []
-              },
-              {
-                "name": "low_price",
-                "table": "bors_prices",
-                "refs": []
-              },
-              {
-                "name": "open_price",
-                "table": "bors_prices",
-                "refs": []
-              },
-              {
-                "name": "close_price",
-                "table": "bors_prices",
-                "refs": []
+                "name": "accountname",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "accountname",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
               },
               {
                 "name": "volume",
-                "table": "bors_prices",
-                "refs": []
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "volume",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "value",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "value",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "acquiredvalue",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "acquiredvalue",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "averageacquiredprice",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "averageacquiredprice",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "averageacquiredpriceinstrumentcurrency",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "averageacquiredpriceinstrumentcurrency",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "profit",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "profit",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "profitpercent",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "profitpercent",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "instrumentid",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "instrumentid",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "name",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "name",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "isin",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "isin",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "tickersymbol",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "tickersymbol",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "currency",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "currency",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "orderbookid",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "orderbookid",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "type",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "type",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "lastprice",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "lastprice",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "change",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "change",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "changepercent",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "changepercent",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "dayhighestprice",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "dayhighestprice",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "daylowestprice",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "daylowestprice",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
+              },
+              {
+                "name": "date",
+                "table": '"recent_holdings_filter_weekends"',
+                "refs": [
+                  {
+                    "name": "date",
+                    "table": "recent_holdings",
+                    "refs": []
+                  }
+                ]
               }
-            ]
+            ],
+            "command": {
+              "command": "sql-nav-link.openPath",
+              "title": '"recent_holdings_filter_weekends"',
+              "arguments": [
+                "e:\\Uibi\\sqlmesh\\project_one\\models\\05_external\\recent_holdings_filter_weekends.sql"
+              ]
+            }
           },
-          "refs": [],
-          "fields": []
+          "refs": [
+            {
+              "model": {
+                "collapsibleState": 1,
+                "label": '"recent_holdings"',
+                "name": '"recent_holdings"',
+                "file_name": "recent_holdings.sql",
+                "file_path": "e:\\Uibi\\sqlmesh\\project_one\\models\\00_mock\\recent_holdings.sql",
+                "table_names": [
+                  "public.postgres.holdings"
+                ],
+                "columns": [
+                  {
+                    "name": "accountid",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "accountid",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "accountname",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "accountname",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "volume",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "volume",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "value",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "value",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "acquiredvalue",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "acquiredvalue",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "averageacquiredprice",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "averageacquiredprice",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "averageacquiredpriceinstrumentcurrency",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "averageacquiredpriceinstrumentcurrency",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "profit",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "profit",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "profitpercent",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "profitpercent",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "instrumentid",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "instrumentid",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "name",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "name",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "isin",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "isin",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "tickersymbol",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "tickersymbol",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "currency",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "currency",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "orderbookid",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "orderbookid",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "type",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "type",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "lastprice",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "lastprice",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "change",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "change",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "changepercent",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "changepercent",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "dayhighestprice",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "dayhighestprice",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "daylowestprice",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "daylowestprice",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "date",
+                    "table": '"recent_holdings"',
+                    "refs": [
+                      {
+                        "name": "unixtotime",
+                        "refs": [
+                          {
+                            "name": "date",
+                            "table": "public.postgres.holdings",
+                            "refs": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "command": {
+                  "command": "sql-nav-link.openPath",
+                  "title": '"recent_holdings"',
+                  "arguments": [
+                    "e:\\Uibi\\sqlmesh\\project_one\\models\\00_mock\\recent_holdings.sql"
+                  ]
+                }
+              },
+              "refs": [
+                {
+                  "model": {
+                    "name": "public.postgres.holdings",
+                    "file_name": "",
+                    "file_path": "",
+                    "table_names": [],
+                    "columns": [
+                      {
+                        "name": "accountid",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "accountname",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "volume",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "value",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "acquiredvalue",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "averageacquiredprice",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "averageacquiredpriceinstrumentcurrency",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "profit",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "profitpercent",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "instrumentid",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "name",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "isin",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "tickersymbol",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "currency",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "orderbookid",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "type",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "lastprice",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "change",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "changepercent",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "dayhighestprice",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "daylowestprice",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      },
+                      {
+                        "name": "date",
+                        "table": "public.postgres.holdings",
+                        "refs": []
+                      }
+                    ]
+                  },
+                  "refs": [],
+                  "fields": [
+                    "accountid",
+                    "accountname",
+                    "volume",
+                    "value",
+                    "acquiredvalue",
+                    "averageacquiredprice",
+                    "averageacquiredpriceinstrumentcurrency",
+                    "profit",
+                    "profitpercent",
+                    "instrumentid",
+                    "name",
+                    "isin",
+                    "tickersymbol",
+                    "currency",
+                    "orderbookid",
+                    "type",
+                    "lastprice",
+                    "change",
+                    "changepercent",
+                    "dayhighestprice",
+                    "daylowestprice",
+                    "date"
+                  ]
+                }
+              ],
+              "fields": [
+                "accountid",
+                "accountname",
+                "volume",
+                "value",
+                "acquiredvalue",
+                "averageacquiredprice",
+                "averageacquiredpriceinstrumentcurrency",
+                "profit",
+                "profitpercent",
+                "instrumentid",
+                "name",
+                "isin",
+                "tickersymbol",
+                "currency",
+                "orderbookid",
+                "type",
+                "lastprice",
+                "change",
+                "changepercent",
+                "dayhighestprice",
+                "daylowestprice",
+                "date"
+              ]
+            }
+          ],
+          "fields": [
+            "accountid",
+            "accountname",
+            "volume",
+            "value",
+            "acquiredvalue",
+            "averageacquiredprice",
+            "averageacquiredpriceinstrumentcurrency",
+            "profit",
+            "profitpercent",
+            "instrumentid",
+            "name",
+            "isin",
+            "tickersymbol",
+            "currency",
+            "orderbookid",
+            "type",
+            "lastprice",
+            "change",
+            "changepercent",
+            "dayhighestprice",
+            "daylowestprice",
+            "date"
+          ]
         }
       ]
     },
@@ -706,487 +1786,282 @@
       {
         "model": {
           "collapsibleState": 1,
-          "label": "last_two_week_prices",
-          "name": "last_two_week_prices",
-          "file_name": "last_two_week_prices.sql",
-          "file_path": "E:\\Uibi\\sqlmesh\\project_one\\models\\05_external\\last_two_week_prices.sql",
+          "label": '"holdings_latest_difference"',
+          "name": '"holdings_latest_difference"',
+          "file_name": "holdings_latest_difference.sql",
+          "file_path": "e:\\Uibi\\sqlmesh\\project_one\\models\\20_transform\\holdings_latest_difference.sql",
           "table_names": [
-            "recent_prices"
+            "holdings_recent_change"
           ],
           "columns": [
             {
-              "name": "ins_id",
-              "table": "last_two_week_prices",
+              "name": "name",
+              "table": '"holdings_latest_difference"',
               "refs": [
                 {
-                  "name": "ins_id",
-                  "table": "recent_prices",
+                  "name": "name",
+                  "table": "holdings_recent_change",
                   "refs": []
                 }
               ]
             },
             {
-              "name": "price_data",
-              "table": "last_two_week_prices",
+              "name": "orderbookid",
+              "table": '"holdings_latest_difference"',
               "refs": [
                 {
-                  "name": "high_price",
-                  "table": "recent_prices",
+                  "name": "orderbookid",
+                  "table": "holdings_recent_change",
                   "refs": []
-                },
+                }
+              ]
+            },
+            {
+              "name": "lag_2_profitpercent",
+              "table": '"holdings_latest_difference"',
+              "refs": [
                 {
-                  "name": "open_price",
-                  "table": "recent_prices",
+                  "name": "lag_2_profitpercent",
+                  "table": "holdings_recent_change",
                   "refs": []
-                },
+                }
+              ]
+            },
+            {
+              "name": "lag_profitpercent",
+              "table": '"holdings_latest_difference"',
+              "refs": [
                 {
-                  "name": "close_price",
-                  "table": "recent_prices",
+                  "name": "lag_profitpercent",
+                  "table": "holdings_recent_change",
                   "refs": []
-                },
+                }
+              ]
+            },
+            {
+              "name": "profitpercent",
+              "table": '"holdings_latest_difference"',
+              "refs": [
                 {
-                  "name": "trade_date",
-                  "table": "recent_prices",
+                  "name": "profitpercent",
+                  "table": "holdings_recent_change",
                   "refs": []
-                },
+                }
+              ]
+            },
+            {
+              "name": "lag_2_time",
+              "table": '"holdings_latest_difference"',
+              "refs": [
                 {
-                  "name": "low_price",
-                  "table": "recent_prices",
+                  "name": "lag_2_time",
+                  "table": "holdings_recent_change",
                   "refs": []
+                }
+              ]
+            },
+            {
+              "name": "lag_time",
+              "table": '"holdings_latest_difference"',
+              "refs": [
+                {
+                  "name": "lag_time",
+                  "table": "holdings_recent_change",
+                  "refs": []
+                }
+              ]
+            },
+            {
+              "name": "latest_time",
+              "table": '"holdings_latest_difference"',
+              "refs": [
+                {
+                  "name": "latest_time",
+                  "table": "holdings_recent_change",
+                  "refs": []
+                }
+              ]
+            },
+            {
+              "name": "rn",
+              "table": '"holdings_latest_difference"',
+              "refs": [
+                {
+                  "name": "rn",
+                  "table": "holdings_recent_change",
+                  "refs": []
+                }
+              ]
+            },
+            {
+              "name": "minute_difference",
+              "table": '"holdings_latest_difference"',
+              "refs": [
+                {
+                  "name": "extract",
+                  "refs": [
+                    {
+                      "name": "literal:MINUTE",
+                      "refs": []
+                    },
+                    {
+                      "name": "sub",
+                      "refs": [
+                        {
+                          "name": "latest_time",
+                          "table": "holdings_recent_change",
+                          "refs": []
+                        },
+                        {
+                          "name": "lag_time",
+                          "table": "holdings_recent_change",
+                          "refs": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "minute_difference_2",
+              "table": '"holdings_latest_difference"',
+              "refs": [
+                {
+                  "name": "extract",
+                  "refs": [
+                    {
+                      "name": "literal:MINUTE",
+                      "refs": []
+                    },
+                    {
+                      "name": "sub",
+                      "refs": [
+                        {
+                          "name": "lag_time",
+                          "table": "holdings_recent_change",
+                          "refs": []
+                        },
+                        {
+                          "name": "lag_2_time",
+                          "table": "holdings_recent_change",
+                          "refs": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "latest_diff",
+              "table": '"holdings_latest_difference"',
+              "refs": [
+                {
+                  "name": "round",
+                  "refs": [
+                    {
+                      "name": "cast",
+                      "refs": [
+                        {
+                          "name": "sub",
+                          "refs": [
+                            {
+                              "name": "profitpercent",
+                              "table": "holdings_recent_change",
+                              "refs": []
+                            },
+                            {
+                              "name": "lag_profitpercent",
+                              "table": "holdings_recent_change",
+                              "refs": []
+                            }
+                          ]
+                        },
+                        {
+                          "name": "DECIMAL",
+                          "refs": []
+                        }
+                      ]
+                    },
+                    {
+                      "name": "literal:2",
+                      "refs": []
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "latest_2_diff",
+              "table": '"holdings_latest_difference"',
+              "refs": [
+                {
+                  "name": "round",
+                  "refs": [
+                    {
+                      "name": "cast",
+                      "refs": [
+                        {
+                          "name": "sub",
+                          "refs": [
+                            {
+                              "name": "lag_profitpercent",
+                              "table": "holdings_recent_change",
+                              "refs": []
+                            },
+                            {
+                              "name": "lag_2_profitpercent",
+                              "table": "holdings_recent_change",
+                              "refs": []
+                            }
+                          ]
+                        },
+                        {
+                          "name": "DECIMAL",
+                          "refs": []
+                        }
+                      ]
+                    },
+                    {
+                      "name": "literal:2",
+                      "refs": []
+                    }
+                  ]
                 }
               ]
             }
           ],
           "command": {
             "command": "sql-nav-link.openPath",
-            "title": "last_two_week_prices",
+            "title": '"holdings_latest_difference"',
             "arguments": [
-              "E:\\Uibi\\sqlmesh\\project_one\\models\\05_external\\last_two_week_prices.sql"
+              "e:\\Uibi\\sqlmesh\\project_one\\models\\20_transform\\holdings_latest_difference.sql"
             ]
           }
         },
-        "refs": [
-          {
-            "model": {
-              "collapsibleState": 1,
-              "label": "group_day_holding_with_bors",
-              "name": "group_day_holding_with_bors",
-              "file_name": "group_day_holding_with_bors.sql",
-              "file_path": "E:\\Uibi\\sqlmesh\\project_one\\models\\10_open\\group_day_holding_with_bors.sql",
-              "table_names": [
-                "bors_info",
-                "group_holding_day",
-                "last_two_week_prices"
-              ],
-              "columns": [
-                {
-                  "name": "averageacquiredprice",
-                  "table": "group_day_holding_with_bors",
-                  "refs": [
-                    {
-                      "name": "averageacquiredprice",
-                      "table": "group_holding_day",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "instrumentid",
-                  "table": "group_day_holding_with_bors",
-                  "refs": [
-                    {
-                      "name": "instrumentid",
-                      "table": "group_holding_day",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "name",
-                  "table": "group_day_holding_with_bors",
-                  "refs": [
-                    {
-                      "name": "name",
-                      "table": "group_holding_day",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "tickersymbol",
-                  "table": "group_day_holding_with_bors",
-                  "refs": [
-                    {
-                      "name": "tickersymbol",
-                      "table": "group_holding_day",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "orderbookid",
-                  "table": "group_day_holding_with_bors",
-                  "refs": [
-                    {
-                      "name": "orderbookid",
-                      "table": "group_holding_day",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "prices_on_date",
-                  "table": "group_day_holding_with_bors",
-                  "refs": [
-                    {
-                      "name": "prices_on_date",
-                      "table": "group_holding_day",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "type",
-                  "table": "group_day_holding_with_bors",
-                  "refs": [
-                    {
-                      "name": "type",
-                      "table": "group_holding_day",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "instid",
-                  "table": "group_day_holding_with_bors",
-                  "refs": [
-                    {
-                      "name": "instid",
-                      "table": "bors_info",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "price_data",
-                  "table": "group_day_holding_with_bors",
-                  "refs": [
-                    {
-                      "name": "price_data",
-                      "table": "last_two_week_prices",
-                      "refs": []
-                    },
-                    {
-                      "name": "p_entry",
-                      "table": "ghp",
-                      "refs": []
-                    },
-                    {
-                      "name": "day_data",
-                      "table": "ghp",
-                      "refs": []
-                    }
-                  ]
-                }
-              ],
-              "command": {
-                "command": "sql-nav-link.openPath",
-                "title": "group_day_holding_with_bors",
-                "arguments": [
-                  "E:\\Uibi\\sqlmesh\\project_one\\models\\10_open\\group_day_holding_with_bors.sql"
-                ]
-              }
-            },
-            "refs": [],
-            "fields": []
-          },
-          {
-            "model": {
-              "collapsibleState": 1,
-              "label": "last_two_week_holdings",
-              "name": "last_two_week_holdings",
-              "file_name": "last_two_week_holdings.sql",
-              "file_path": "E:\\Uibi\\sqlmesh\\project_one\\models\\10_open\\last_two_week_holdings.sql",
-              "table_names": [
-                "bors_info",
-                "grouped_holdings",
-                "last_two_week_prices"
-              ],
-              "columns": [
-                {
-                  "name": "instrumentid",
-                  "table": "last_two_week_holdings",
-                  "refs": [
-                    {
-                      "name": "instrumentid",
-                      "table": "grouped_holdings",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "orderbookid",
-                  "table": "last_two_week_holdings",
-                  "refs": [
-                    {
-                      "name": "orderbookid",
-                      "table": "grouped_holdings",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "name",
-                  "table": "last_two_week_holdings",
-                  "refs": [
-                    {
-                      "name": "name",
-                      "table": "grouped_holdings",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "tickersymbol",
-                  "table": "last_two_week_holdings",
-                  "refs": [
-                    {
-                      "name": "tickersymbol",
-                      "table": "grouped_holdings",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "type",
-                  "table": "last_two_week_holdings",
-                  "refs": [
-                    {
-                      "name": "type",
-                      "table": "grouped_holdings",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "averageacquiredprice",
-                  "table": "last_two_week_holdings",
-                  "refs": [
-                    {
-                      "name": "averageacquiredprice",
-                      "table": "grouped_holdings",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "ins_id",
-                  "table": "last_two_week_holdings",
-                  "refs": [
-                    {
-                      "name": "ins_id",
-                      "table": "last_two_week_prices",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "price_data",
-                  "table": "last_two_week_holdings",
-                  "refs": [
-                    {
-                      "name": "price_data",
-                      "table": "last_two_week_prices",
-                      "refs": []
-                    }
-                  ]
-                }
-              ],
-              "command": {
-                "command": "sql-nav-link.openPath",
-                "title": "last_two_week_holdings",
-                "arguments": [
-                  "E:\\Uibi\\sqlmesh\\project_one\\models\\10_open\\last_two_week_holdings.sql"
-                ]
-              }
-            },
-            "refs": [],
-            "fields": []
-          },
-          {
-            "model": {
-              "collapsibleState": 1,
-              "label": "reddit_trending_with_prices",
-              "name": "reddit_trending_with_prices",
-              "file_name": "reddit_trending_with_prices.sql",
-              "file_path": "E:\\Uibi\\sqlmesh\\project_one\\models\\10_open\\reddit_trending_with_prices.sql",
-              "table_names": [
-                "reddit_seven_day_trending_two",
-                "reddit_seven_day_trending",
-                "last_two_week_prices"
-              ],
-              "columns": [
-                {
-                  "name": "count",
-                  "table": "reddit_trending_with_prices",
-                  "refs": [
-                    {
-                      "name": "COUNT",
-                      "table": "reddit_seven_day_trending_two",
-                      "refs": []
-                    },
-                    {
-                      "name": "COUNT",
-                      "table": "reddit_seven_day_trending",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "JSON_AGG",
-                  "table": "reddit_trending_with_prices",
-                  "refs": [
-                    {
-                      "name": "JSON_AGG",
-                      "table": "reddit_seven_day_trending_two",
-                      "refs": []
-                    },
-                    {
-                      "name": "JSON_AGG",
-                      "table": "reddit_seven_day_trending",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "instid",
-                  "table": "reddit_trending_with_prices",
-                  "refs": [
-                    {
-                      "name": "instid",
-                      "table": "reddit_seven_day_trending_two",
-                      "refs": []
-                    },
-                    {
-                      "name": "instid",
-                      "table": "reddit_seven_day_trending",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "orderbookid",
-                  "table": "reddit_trending_with_prices",
-                  "refs": [
-                    {
-                      "name": "orderbookid",
-                      "table": "reddit_seven_day_trending_two",
-                      "refs": []
-                    },
-                    {
-                      "name": "orderbookid",
-                      "table": "reddit_seven_day_trending",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "tickersymbol",
-                  "table": "reddit_trending_with_prices",
-                  "refs": [
-                    {
-                      "name": "tickersymbol",
-                      "table": "reddit_seven_day_trending_two",
-                      "refs": []
-                    },
-                    {
-                      "name": "tickersymbol",
-                      "table": "reddit_seven_day_trending",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "name",
-                  "table": "reddit_trending_with_prices",
-                  "refs": [
-                    {
-                      "name": "name",
-                      "table": "reddit_seven_day_trending_two",
-                      "refs": []
-                    },
-                    {
-                      "name": "name",
-                      "table": "reddit_seven_day_trending",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "status",
-                  "table": "reddit_trending_with_prices",
-                  "refs": [
-                    {
-                      "name": "status",
-                      "table": "",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "price_data",
-                  "table": "reddit_trending_with_prices",
-                  "refs": [
-                    {
-                      "name": "price_data",
-                      "table": "last_two_week_prices",
-                      "refs": []
-                    }
-                  ]
-                },
-                {
-                  "name": "last_update_time",
-                  "table": "reddit_trending_with_prices",
-                  "refs": [
-                    {
-                      "name": "last_update_time",
-                      "table": "",
-                      "refs": []
-                    }
-                  ]
-                }
-              ],
-              "command": {
-                "command": "sql-nav-link.openPath",
-                "title": "reddit_trending_with_prices",
-                "arguments": [
-                  "E:\\Uibi\\sqlmesh\\project_one\\models\\10_open\\reddit_trending_with_prices.sql"
-                ]
-              }
-            },
-            "refs": [],
-            "fields": []
-          }
-        ],
+        "refs": [],
         "fields": [
-          "trade_date",
-          "ins_id",
-          "high_price",
-          "low_price",
-          "open_price",
-          "close_price",
-          "volume"
+          "profitpercent",
+          "name",
+          "orderbookid",
+          "lag_profitpercent",
+          "lag_time",
+          "lag_2_profitpercent",
+          "lag_2_time",
+          "rn",
+          "latest_time"
         ]
       }
     ],
     "size_left": "3",
-    "size_right": "3"
+    "size_right": "2"
   };
 
   // lineageViewerTS/src/main.ts
   var vscode2 = getVsCodeApi();
   document.addEventListener("DOMContentLoaded", () => {
-    renderLineage(testDataReverse);
+    renderLineage(testData);
   });
 })();
 //# sourceMappingURL=index.js.map

@@ -1,6 +1,6 @@
 export interface Column {
     name:string
-    table:string
+    table?:string
     refs:Column[]
 }
 

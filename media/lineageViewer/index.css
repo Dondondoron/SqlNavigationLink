@@ -85,6 +85,9 @@ button:hover {
   display: flex;
   flex-wrap: nowrap;
 }
+.node-card header span {
+  white-space: nowrap;
+}
 .node-card ul {
   display: flex;
   flex-direction: column;
@@ -107,6 +110,21 @@ button:hover {
   border: 1px solid var(--vscode-widget-border, #333);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   margin: 1px;
+}
+.lineage-column-container {
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: center;
+  width: fit-content;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  width: 100%;
+}
+.lineage-column-container li {
+  white-space: nowrap;
+  align-self: center;
+  margin-left: 10px;
+  width: 100%;
+  text-align: start;
 }
 .node-card button {
   margin-left: 5px;
@@ -168,6 +186,9 @@ button:hover {
   width: 32px;
   height: 32px;
   font-size: 24px;
+}
+.full-width: {
+  width: 100%;
 }
 .selected {
   border: 1px solid var(--vscode-activityBar-activeBorder, green);

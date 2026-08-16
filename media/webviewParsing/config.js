@@ -34,8 +34,8 @@ eventListener = (e) => {
         if (action === 'addPath') {
             post(action);
         }
-        else if (action === 'parsePaths') {
-            post(action);
+        else if (action === 'parsePath') {
+            post(action, actionButton.dataset.value);
         }
         else if (action === 'removePath') {
             post(action, actionButton.dataset.value);
@@ -105,6 +105,9 @@ function createPathItem(d) {
                 ${d.type}
             </button>
 
+            <button data-action="parsePath" data-value="${d.filePath}" type="button" class="icon-button">
+                Parse
+            </button>
             <button data-action="removePath" data-value="${d.filePath}" type="button" class="icon-button">
                 x
             </button>

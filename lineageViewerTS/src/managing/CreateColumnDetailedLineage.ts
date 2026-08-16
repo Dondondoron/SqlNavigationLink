@@ -1,0 +1,107 @@
+import { Column } from "../domain/domain";
+import { Card } from "./Card";
+
+
+
+function createTarget(column:string, element:Element){
+
+    return {
+        column: column,
+        element: element
+    }
+}
+
+export class ColumnDetailLineageCreator {
+
+
+
+    constructor(private card: Card, private column: Column) { }
+
+
+    render(connect: { a: Element; b: Element; }[], preColumnDiv: Element | null) {
+
+        const nextTargets:Map<string, Set<{column:string, element:Element}>> = new Map()
+
+        const canvas = document.createElement('div')
+        canvas.classList.add('lineage-column-container')
+
+        const cardColumn = this.card.cardColumns.get(this.column.name)
+        if (!cardColumn) return
+        if(cardColumn.expanded){
+            
+            if(preColumnDiv)connect.push({a: cardColumn.fieldItem, b:preColumnDiv})
+
+            return 
+        }
+
+        cardColumn.fieldItem.replaceWith(canvas)
+
+        cardColumn.fieldItem.classList.remove('hidden')
+
+
+        cardColumn.canvas = canvas
+
+
+        function recurse(col: Column, element: HTMLElement, prevHeader:Element|null, rootElement?: HTMLElement) {
+
+
+            const innerCanvas = document.createElement('div')
+            innerCanvas.classList.add('lineage-column-container', 'full-width')
+            innerCanvas.style.flexDirection = 'row-reverse'
+
+
+            const header = rootElement ? rootElement :  document.createElement('li')
+            header.textContent = col.name
+
+            header?.classList.add('selected');
+
+            if(prevHeader)connect.push({a: header, b:prevHeader})
+
+            const childContainer = document.createElement('div')
+            childContainer.classList.add('child_card_container')
+
+
+            element.appendChild(innerCanvas)
+            innerCanvas.appendChild(header)
+            innerCanvas.appendChild(childContainer)
+
+
+            if(col.refs.length === 0){
+                header.style.marginLeft = '0px'
+            }
+            
+            if (col.refs.length === 0 && col.table) {
+
+                    if(nextTargets.has(col.table))
+                        nextTargets.get(col.table)?.add(createTarget(col.name, header))
+                    else{
+                        nextTargets.set(col.table, new Set([createTarget(col.name, header)]))
+                    }
+                // To Next Table
+
+            }
+            else if (col.refs.length > 0 && col.table && !rootElement) {
+                // CTE or SubQuery
+
+                header.textContent = col.table + '.' + col.name
+            }
+            else if (col.refs.length === 0 && !col.table) {
+                // Leaf
+            }
+
+            col.refs.forEach(r => {
+                recurse(r, childContainer, header)
+
+            })
+
+        }
+
+        recurse(this.column, canvas, preColumnDiv, cardColumn.fieldItem)
+
+
+        cardColumn.expanded = true
+
+        return nextTargets
+
+    }
+}

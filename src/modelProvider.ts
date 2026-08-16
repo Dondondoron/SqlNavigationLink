@@ -3,9 +3,9 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as os from 'os';
 import * as fs from 'fs';
-
+import * as fsp from 'fs/promises'
 import { execFile } from "child_process";
-
+import * as crypto from 'crypto';
 import { logError, logInformation } from "./logging";
 import { Column, SqlModelInfo } from "./domain/domain";
 
@@ -16,7 +16,7 @@ export class SqlModelInfoTree extends vscode.TreeItem implements SqlModelInfo {
         public file_path: string,
         public table_names: string[],
         public columns: Column[]
-        
+
     ) {
         super(name, vscode.TreeItemCollapsibleState.Collapsed)
 
@@ -48,7 +48,7 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
     }
 
 
-    constructor() {
+    constructor(private context: vscode.ExtensionContext) {
 
     }
 
@@ -71,15 +71,18 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
 
     initModels(models: SqlModelsResponse) {
 
-        this.models = new Map(Object.entries(models).map(m =>
-            [vscode.Uri.file(m[0]).fsPath,
-            new SqlModelInfoTree(
-                m[1].name,
-                m[1].file_name,
-                m[1].file_path,
-                m[1].table_names,
-                m[1].columns
-            )]))
+        Object.entries(models).forEach(m =>
+            this.models.set(
+                vscode.Uri.file(m[1].file_path).fsPath,
+                new SqlModelInfoTree(
+                    m[1].name,
+                    m[1].file_name,
+                    m[1].file_path,
+                    m[1].table_names,
+                    m[1].columns
+                )
+            )
+        )
 
         this._onDidChangeTreeData.fire()
     }
@@ -90,17 +93,69 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
         return vscode.languages.registerDefinitionProvider('sql', definitionProvider)
     }
 
+    getCacheUri() {
 
-    getPythonParsePromise(pythonPath: string, sqlPaths: any[], context: vscode.ExtensionContext): Promise<SqlModelsResponse | undefined> {
+        const globalStorageUri = this.context.globalStorageUri;
+
+        // 2. Ensure the storage directory exists on disk
+        try {
+            fsp.mkdir(globalStorageUri.fsPath, { recursive: true });
+        } catch (error) {
+            console.error('Failed to create global storage directory:', error);
+        }
+
+        return globalStorageUri
+    }
+
+    async saveCache(filename: string, data: object) {
+
+        const cacheFileUri = vscode.Uri.joinPath(this.getCacheUri(), filename)
+
+        const jsonString = JSON.stringify(data, null, 2);
+        await vscode.workspace.fs.writeFile(cacheFileUri, Buffer.from(jsonString, 'utf8'));
+
+    }
+
+    loadAllCache(paths: string[]) {
+
+        Promise.all(paths.map(p => this.loadCache(getSafeFileNameForPath(p)))).then(data=>{
+            data.forEach(d=>{
+
+                if(d){
+                    this.initModels(d)
+                }
+            })
+        })
+
+    }
+
+    async loadCache(filename: string): Promise<object | null> {
+        const cacheFileUri = vscode.Uri.joinPath(this.getCacheUri(), filename)
+
+        try {
+            const fileData = await vscode.workspace.fs.readFile(cacheFileUri);
+            return JSON.parse(Buffer.from(fileData).toString('utf8'));
+        } catch {
+            // File likely doesn't exist yet
+            return null
+        }
+    }
+
+    getPythonParsePromise(pythonPath: string, targetPath: any, type: any): Promise<SqlModelsResponse | undefined> {
+
+        const saveCache = vscode.workspace
+            .getConfiguration('Dondondoron.sql-nav-link')
+            .get('saveCache', false);
 
         logInformation("Starting the parsing of files from python env: " + pythonPath)
 
-        const scriptPath = path.join(context.extensionPath, 'scripts', 'run_crawler.py')
+        const scriptPath = path.join(this.context.extensionPath, 'scripts', 'run_crawler.py');
 
         return new Promise<SqlModelsResponse | undefined>((resolve) => {
             // 1. Create a unique temporary file path
-            const tempFileName = `sql_scanner_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.json`;
-            const tempFilePath = path.join(os.tmpdir(), tempFileName);
+            const tempFileName = saveCache ? getSafeFileNameForPath(targetPath) : `sql_scanner_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.json`;
+            const tempFilePath = saveCache ? this.getCacheUri().fsPath : os.tmpdir();
+            const fullTarget = path.join(tempFilePath, tempFileName)
 
             // Helper to clean up the temp file safely
             const cleanup = () => {
@@ -110,7 +165,7 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
             // 2. Pass the tempFilePath as the third CLI argument to Python
             execFile(
                 pythonPath,
-                [scriptPath, tempFilePath, ...sqlPaths],
+                [scriptPath, tempFilePath, tempFileName, targetPath, type],
                 { maxBuffer: 1024 * 1024 * 10 }, // Generous 10MB stderr buffer for Python logs
                 (error: any, stdout: any, stderr: any) => {
                     if (error) {
@@ -118,8 +173,8 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
                     }
 
                     // 3. Read the output directly from the file
-                    fs.readFile(tempFilePath, 'utf-8', (readErr, rawData) => {
-                        cleanup();
+                    fs.readFile(fullTarget, 'utf-8', (readErr, rawData) => {
+                        if (!saveCache) cleanup();
 
                         if (readErr) {
                             logError(`SQL Scanner Error: Could not read temporary output file.`)
@@ -278,4 +333,21 @@ class ModelProvideDefinition implements vscode.DefinitionProvider {
     }
 
 
+}
+export function getSafeFileNameForPath(inputPath: string): string {
+    // 1. Normalize slashes and resolve to an absolute path if needed
+    const resolvedPath = path.resolve(inputPath);
+
+    const sanitized = resolvedPath
+        .replace(/[:/\\*?"<>|]/g, '_')
+        .replace(/\s+/g, '_')
+        .replace(/_+/g, '_');
+
+    const hash = crypto.createHash('md5').update(resolvedPath).digest('hex').substring(0, 8);
+
+    const ext = path.extname(resolvedPath) || '.json';
+
+    const cleanName = sanitized.replace(/^_+|_+$/g, '');
+
+    return `${cleanName}_${hash}${ext}`;
 }

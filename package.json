@@ -113,6 +113,11 @@
           "type": "boolean",
           "default": false,
           "description": "Whether to automatically load context (default false)."
+        },
+        "Dondondoron.sql-nav-link.saveCache": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to save and load context cache for each path for faster startup (default false). If Cache is True it will not auto load Context"
         }
       }
     }

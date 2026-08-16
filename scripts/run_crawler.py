@@ -3,6 +3,7 @@ from sql_parser import parse_sql_models_and_extract_tables
 import sys
 import json
 import itertools
+from save_data import save_data_json
 
 #import debugpy
 #if not debugpy.is_client_connected():
@@ -20,12 +21,18 @@ if __name__ == '__main__':
 
     all_models = dict()
 
-    count = 2
-    while count < len(sys.argv) - 1:
-        path = sys.argv[count]
-        sql_type = sys.argv[count+1]
+
+    out_path = sys.argv[1]
+    out_path_file = sys.argv[2]
+    path = sys.argv[3]
+    sql_type = sys.argv[4]
+
+    if sql_type == 'SQLMESH':
+        from sqlmesh_crawler import run
+        run(path, out_path, out_path_file) 
 
 
+    else:
         crawler = SqlCrawler(path, sql_type)
 
         raw_folders, config_files = crawler.crawl_folders([path])
@@ -40,18 +47,4 @@ if __name__ == '__main__':
 
         all_models.update(sql_models)
 
-        count += 2
-
-    
-    output_data = {
-        key: model.model_dump(mode='json') if hasattr(model, 'model_dump') else model
-        for key, model in all_models.items()
-    }
-
-    if len(sys.argv) > 1:
-        output_file_path = sys.argv[1]
-        with open(output_file_path, 'w', encoding='utf-8') as f:
-            json.dump(output_data, f)
-    else:
-        # Fallback to stdout for quick manual CLI testing
-        print(json.dumps(output_data))
+        save_data_json(sql_models, out_path, out_path_file)

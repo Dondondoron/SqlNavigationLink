@@ -1,7 +1,5 @@
 
-import sys
 import json
-import os
 from pathlib import Path
 
 def save_data_json(all_models: dict, output_path, file_name):

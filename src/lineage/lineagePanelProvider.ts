@@ -93,7 +93,7 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
 
             if (column.refs.length > 0) {
                 column.refs.forEach(ref => getLeafs(ref, tables))
-            } else {
+            } else if(column.table){
                 if (tables.has(column.table)) {
                     tables.get(column.table)?.push(column)
                 }
@@ -110,7 +110,7 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
             });
 
             return Array.from(leafMap).map((t) => {
-                const found = arrayedModels.find(m => m.name === t[0].replaceAll('"', ''));
+                const found = arrayedModels.find(m => m.name.replaceAll('"', '') === t[0].replaceAll('"', ''));
 
                 const out = found ?? t;
 
@@ -139,7 +139,7 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
 
         const leftRefs = Array.from(leafMap)
             .map(ti => {
-                const nextModel = arrayedModels.find(m => m.name === ti[0].replaceAll('"', '')) ?? ti[0]
+                const nextModel = arrayedModels.find(m => m.name.replaceAll('"', '') === ti[0].replaceAll('"', '')) ?? ti[0]
                 const isSqlModel = nextModel instanceof SqlModelInfoTree;
 
                 model.columns
@@ -157,7 +157,7 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
         function loopModelToRefRightSide(currentModel: SqlModelInfo, maxLoops: number, currentDepth: number = 2): ModelLineage[] {
             // Find all models that depend on currentModel
             const downstreamModels = arrayedModels.filter(m =>
-                m.table_names?.some(t => t.replaceAll('"', '') === currentModel.name)
+                m.table_names?.some(t => t.replaceAll('"', '') === currentModel.name.replaceAll('"', ''))
             );
 
             return downstreamModels.map(m => {
@@ -174,7 +174,7 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
 
         // Right refs invocation (Downstream dependents)
         const rightRefs : ModelLineage[] = arrayedModels
-            .filter(m => m.table_names?.some(t => t.replaceAll('"', '') === model.name))
+            .filter(m => m.table_names?.some(t => t.replaceAll('"', '') === model.name.replaceAll('"', '')))
             .map(m => {
                 return {
                     model: m,

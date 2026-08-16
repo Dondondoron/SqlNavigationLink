@@ -16,7 +16,7 @@ const vscode = getVsCodeApi();
 
 document.addEventListener('DOMContentLoaded', () => {
   
-    renderLineage(testDataReverse)
+    renderLineage(testData)
 });
 
 

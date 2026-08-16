@@ -39,10 +39,10 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
 
             switch (data.command) {
                 case "addPath":
-                    await vscode.commands.executeCommand('sql-nav-link.addPath')
+                    await vscode.commands.executeCommand('sql-nav-link.addPath', data.args[0])
                     break;
-                case "parsePaths":
-                    vscode.commands.executeCommand('sql-nav-link.parsePaths')
+                case "parsePath":
+                    vscode.commands.executeCommand('sql-nav-link.parsePaths', data.args[0])
                     break;
                 case "removePath":
                     await this.removePathCommand(data.args[0])
