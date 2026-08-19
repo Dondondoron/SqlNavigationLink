@@ -36,8 +36,7 @@ class SqlMeshCrawler:
         self.config_paths = self.find_sqlmesh_config_directories(path)
 
     def parse_context(self):    
-            context = Context(paths=self.config_paths)
-            context.load()
+            context = Context(paths=self.config_paths, load_state=False)
 
             macromapper: Dict[str, t.Callable] = dict()
 
@@ -117,5 +116,3 @@ class SqlMeshCrawler:
         return found_dirs
 
 
-
-run("E:\\Uibi\\sqlmesh\\project_one", 'E:\\SqlNavLinkTwo\\dist', 'output.json')

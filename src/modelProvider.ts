@@ -166,7 +166,7 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
             execFile(
                 pythonPath,
                 [scriptPath, tempFilePath, tempFileName, targetPath, type],
-                { maxBuffer: 1024 * 1024 * 10 }, // Generous 10MB stderr buffer for Python logs
+                { maxBuffer: 1024 * 1024 * 10, cwd:targetPath}, // Generous 10MB stderr buffer for Python logs
                 (error: any, stdout: any, stderr: any) => {
                     if (error) {
                         logError(`SQL Scanner Error: ${stderr || error.message}`, error.message)

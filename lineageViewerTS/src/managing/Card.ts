@@ -6,7 +6,7 @@ import { ColumnDetailLineageCreator } from "./CreateColumnDetailedLineage"
 export class CardColumn implements Column {
     
     name: string
-    table: string
+    table?: string
     refs: CardColumn[]
     canvas?: HTMLDivElement
 
@@ -327,12 +327,12 @@ export class Card {
 
         const nextColumn = col.name;
         const tableName = col.table;
-        const sanitizedTableName = tableName.replaceAll('"', '');
+        const sanitizedTableName = tableName?.replaceAll('"', '')??'';
 
         if (!nextColumn) return;
 
         const allCards = this.childCards;
-        const targetCard = allCards.get(tableName) ?? allCards.get(sanitizedTableName);
+        const targetCard = allCards.get(tableName??'') ?? allCards.get(sanitizedTableName);
 
 
         if (targetCard) {
