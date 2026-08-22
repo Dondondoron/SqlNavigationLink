@@ -45,6 +45,13 @@ export class ColumnDetailLineageCreator {
         function recurse(col: Column, element: HTMLElement, prevHeader:Element|null, rootElement?: HTMLElement) {
 
 
+            //Skip duplicates
+            if (col.refs.length === 1 && col.table && col.refs[0].table === col.table && col.refs[0].name === col.name  && !rootElement) {
+                recurse(col.refs[0], element, prevHeader)
+                return
+            }
+            
+
             const innerCanvas = document.createElement('div')
             innerCanvas.classList.add('lineage-column-container', 'full-width')
             innerCanvas.style.flexDirection = 'row-reverse'
@@ -69,7 +76,7 @@ export class ColumnDetailLineageCreator {
             if(col.refs.length === 0){
                 header.style.marginLeft = '0px'
             }
-            
+
             if (col.refs.length === 0 && col.table) {
 
                     if(nextTargets.has(col.table))
