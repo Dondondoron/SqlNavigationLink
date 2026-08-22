@@ -58,6 +58,7 @@ export class LineageManager {
 
     showLineageOnCard(cardId: string, column: any, detailed: boolean = false) {
 
+        this.clearPaths()
 
         const focusCard = Card.card_stack.get(cardId)
 
