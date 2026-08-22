@@ -1,3 +1,4 @@
+import { MouseClicker } from "./MouseClick";
 
 export class Zoomer {
 
@@ -6,8 +7,8 @@ export class Zoomer {
 
 
     static instance?: Zoomer
-    static getInstance(){
-        if(!this.instance){
+    static getInstance() {
+        if (!this.instance) {
             this.instance = new Zoomer()
         }
         return this.instance
@@ -34,8 +35,9 @@ export class Zoomer {
     private canvasArea = document.getElementById('canvas-area')!
     private canvas = document.getElementById('lineage-container')!
 
-    constructor() {
+    mouseClick!: MouseClicker
 
+    constructor() {
 
         window.addEventListener('wheel', (e) => {
             this.handleWheel(e)
@@ -46,7 +48,7 @@ export class Zoomer {
         });
 
         window.addEventListener('mousemove', (e) => {
-           this.handleMouseMove(e)
+            this.handleMouseMove(e)
         });
 
         window.addEventListener('mouseup', (e) => {
@@ -56,7 +58,11 @@ export class Zoomer {
 
     }
 
-    
+    getIsPanning() {
+        return this.isPanning
+    }
+
+
 
     private handleMouseDown(e: MouseEvent) {
 
@@ -69,7 +75,7 @@ export class Zoomer {
 
     }
 
-    private handleMouseMove(e:MouseEvent) {
+    private handleMouseMove(e: MouseEvent) {
         if (this.isPanning) {
             if (this.isAnimating) this.isAnimating = false;
 
@@ -89,7 +95,7 @@ export class Zoomer {
     }
 
 
-    private handleMouseUp(e:MouseEvent) {
+    private handleMouseUp(e: MouseEvent) {
 
         if (this.isPanning) {
             this.isPanning = false;
@@ -103,11 +109,13 @@ export class Zoomer {
 
             if (distance > threshold) {
                 return;
+            } else {
+                this.mouseClick.onClick(e)
             }
         }
     }
 
-    private handleWheel(e:WheelEvent) {
+    private handleWheel(e: WheelEvent) {
 
 
         e.preventDefault();
@@ -195,7 +203,7 @@ export class Zoomer {
         this.canvasArea.style.backgroundSize = `100% ${bgSpacing}%`;
     }
 
-    private update(scale:number, tx:number, ty:number) {
+    private update(scale: number, tx: number, ty: number) {
         this.scale = scale;
         this.translateX = tx;
         this.translateY = ty;

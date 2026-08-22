@@ -1,5 +1,7 @@
+import { getVsCodeApi } from "./vscodeAPI";
 
 
+const vscode = getVsCodeApi();
 
 export class Utility {
 
@@ -7,5 +9,14 @@ export class Utility {
         return Math.random().toString(36).substring(2, 9);
     }
 
+    
+
+    
+    static post(command: string, ...args: any[]) {
+        vscode?.postMessage({
+            command: command,
+            args: args
+        })
+    }
     
 }
