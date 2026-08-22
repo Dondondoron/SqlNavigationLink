@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <!--<link rel="stylesheet" href="{{cssUri}}"> -->
+  <link rel="stylesheet" href="lineageViewer/index.css">
+</head>
+
+<body>
+  <div id="canvas-area">
+    <div id="lineage-container" class="lineage-container">
+      <div class="column" id="left-col">
+        <div class="col-title">Upstream (Refs)</div>
+        <div class="nodes" id="left-nodes"></div>
+      </div>
+
+      <div class="column" id="center-col">
+        <div class="col-title">Current Model</div>
+        <div class="nodes" id="center-nodes"></div>
+      </div>
+
+      <div class="column" id="right-col">
+        <div class="col-title">Downstream (Referenced By)</div>
+        <div class="nodes" id="right-nodes"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lineage-size-container left">
+    <button data-action="left-decrease" id="left-decrease-lineage-button" type="button">⇐</button>
+    <label id="left-lineage-size-label"> 3 </label>
+    <button data-action="left-increase" id="left-increase-lineage-button" type="button">⇒</button>
+  </div>
+
+  <div class="lineage-size-container right">
+    <button data-action="right-decrease" id="right-decrease-lineage-button" type="button">⇐</button>
+    <label id="right-lineage-size-label"> 2 </label>
+    <button data-action="right-increase" id="right-increase-lineage-button" type="button">⇒</button>
+  </div>
+
+  <!-- Single bundled JS output from esbuild -->
+  <!--<script src="{{jsUri}}"></script> -->
+  <script type="module" src="lineageViewer/index.js"></script>
+</body>
+
+</html>
