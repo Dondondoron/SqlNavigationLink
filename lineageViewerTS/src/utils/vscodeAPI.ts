@@ -15,6 +15,8 @@ declare global {
 
 let vscodeApi: VsCodeApi | undefined;
 
+export let isMock = false
+
 export function getVsCodeApi(): VsCodeApi {
   if (!vscodeApi) {
     // Check if acquireVsCodeApi is available (i.e., we are inside a VS Code webview)
@@ -25,7 +27,7 @@ export function getVsCodeApi(): VsCodeApi {
       console.warn('acquireVsCodeApi is not available. Using mock VS Code API.');
       
       let mockState: unknown = {};
-      
+      isMock = true
       vscodeApi = {
         postMessage: (message: unknown) => {
           console.log('[Mock VS Code API] postMessage:', message);

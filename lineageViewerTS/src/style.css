@@ -1,12 +1,12 @@
 body {
     font-family: var(--vscode-font-family);
     padding: 12px;
-    color: var(--vscode-foreground);
+    color: var(--vscode-foreground, white);
     background-color: var(--vscode-editor-background);
 }
 
 button {
-    color: var(--vscode-button-foreground);
+    color: var(--vscode-button-foreground, white);
     background: var(--vscode-button-background);
 
     display: flex;
@@ -64,7 +64,7 @@ button:hover {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: var(--vscode-descriptionForeground);
+    color: var(--vscode-descriptionForeground, #fff);
     margin-bottom: 4px;
     text-align: center;
 }
@@ -90,7 +90,7 @@ button:hover {
     word-break: break-all;
     display: flex;
     flex-direction: column;
-    background: var(--vscode-sideBar-background);
+    background: var(--vscode-sideBar-background, #2b2b2b);
     border: 1px solid var(--vscode-widget-border, #333);
     border-radius: 6px;
     justify-content: center;
@@ -233,12 +233,38 @@ button:hover {
 }
 
 
-.selected{
-    border: 1px solid var(--vscode-activityBar-activeBorder, green);
-}
 
 .hidden{
     display: none;
+}
+
+.selected{
+    border: 1px solid var(--vscode-activityBar-activeBorder, rgb(248, 248, 248));
+}
+
+.selected-detailed{
+    border-right: 1px solid var(--vscode-activityBar-activeBorder, rgb(248, 248, 248));
+    border-left: 1px solid var(--vscode-activityBar-activeBorder, rgb(248, 248, 248));
+    border-bottom: 1px dashed var(--vscode-activityBar-activeBorder, rgb(248, 248, 248));
+    border-top: 1px dashed var(--vscode-activityBar-activeBorder, rgb(248, 248, 248));
+    border-radius: 3px;
+    margin: 2px 0px;
+}
+
+.func {
+    color: var(--vscode-symbolIcon-functionForeground, rgb(155, 97, 248));
+}
+
+.outer-table-ref {
+    color: var(--vscode-symbolIcon-classForeground, rgb(220, 150, 100));
+}
+
+.inner-table-ref {
+    color: var(--vscode-symbolIcon-interfaceForeground, rgb(156, 220, 254));
+}
+
+.literal {
+    color: var(--vscode-debugIcon-startForeground, rgb(193, 206, 120));
 }
 
 
@@ -253,5 +279,5 @@ button:hover {
     pointer-events: none;
 }
 .svg path{
-    stroke: var(--vscode-activityBar-activeBorder, green);
+    stroke: var(--vscode-activityBar-activeBorder, rgb(248, 248, 248));
 }

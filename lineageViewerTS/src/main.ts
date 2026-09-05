@@ -4,7 +4,7 @@
 import { renderLineage } from './managing/lineage';
 import './style.css';
 import { testData, testDataReverse } from './test_data/test_data';
-import { getVsCodeApi } from './utils/vscodeAPI';
+import { getVsCodeApi, isMock } from './utils/vscodeAPI';
 
 // 2. Import components & helpers
 
@@ -15,8 +15,7 @@ const vscode = getVsCodeApi();
 
 
 document.addEventListener('DOMContentLoaded', () => {
-  
-    renderLineage(testData)
+    if(isMock)renderLineage(testData)
 });
 
 

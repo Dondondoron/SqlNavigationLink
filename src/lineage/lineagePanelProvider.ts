@@ -218,7 +218,7 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
         );
 
         // Read HTML template from disk
-        const htmlPath = path.join(this._extensionUri.fsPath, 'media', 'lineageViewer', 'lineage.html');
+        const htmlPath = path.join(this._extensionUri.fsPath, 'media', 'lineageViewer', 'index.html');
         let htmlContent = fs.readFileSync(htmlPath, 'utf8');
 
         // Replace placeholders with real URIs

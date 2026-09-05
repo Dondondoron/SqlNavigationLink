@@ -169,7 +169,7 @@ export class MainController {
             return
         }
 
-        const models = await this.sqlModelProvider.getPythonParsePromise(pythonEnv.pythonExecutable, targetPath.filePath, targetPath.type, context);
+        const models = await this.sqlModelProvider.getPythonParsePromise(pythonEnv.pythonExecutable, targetPath.filePath, targetPath.type);
 
         if (models) this.sqlModelProvider.initModels(models);
     }

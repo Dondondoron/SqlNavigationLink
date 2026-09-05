@@ -8,10 +8,12 @@ import { MouseClicker } from "./MouseClick";
 window.addEventListener('message', event => {
     const message = event.data;
 
+
     if (message.command === 'renderLineage') {
         renderLineage(message.data);
     }
 });
+
 
 const lineageManager = new LineageManager()
 

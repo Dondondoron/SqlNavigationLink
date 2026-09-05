@@ -3,7 +3,7 @@
   "displayName": "sql-nav-link",
   "description": "API for interactive Context in SQLMESH Project",
   "publisher": "Dondondoron",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "license": "GPL-3.0",
   "icon": "./media/thumb.png",
   "repository": {
