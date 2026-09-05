@@ -10,7 +10,7 @@ from sqlmesh.core.dialect import  MacroFunc, MacroVar
 from sqlmesh.core.context import Context
 from sqlmesh.core.macros import MacroEvaluator, normalize_macro_name, macro as macro_class
 from sql_parser import ModelParser
-from classes import RawModel, ColRef
+from classes import RawModel, ColRef, TableReference
 
 from sqlglot.schema import MappingSchema
 
@@ -53,7 +53,8 @@ class SqlMeshCrawler:
                 columns = model.columns_to_types
                 if columns:
                     coldic = {col[0]:col[1].name for col in columns.items()}
-                    coldiccooler = [ColRef(name=col.name, table=model.name) for col in columns.values()]
+                    model_table_ref = TableReference(table_name=model.name, schema_name='', catalog_name='')
+                    coldiccooler = [ColRef(name=col.name, table=model_table_ref) for col in columns.values()]
 
                     raw_schema[model.name] = coldiccooler
                     schema[model.name] = coldic
@@ -79,7 +80,7 @@ class SqlMeshCrawler:
                 if isinstance(reqn, exp.Query):
 
                     #querified = qualify(query, context.default_dialect, schema=mappingSchema)
-                    parser = ModelParser(RawModel(model.fqn, str(file_path), file_name, reqn, tables), raw_schema)
+                    parser = ModelParser(RawModel(model.name, str(file_path), file_name, reqn, tables), raw_schema, model.catalog, model.schema_name, model.view_name)
                     sql_model, unmatched_columns = parser.parse()
                     parsed_models[model.fqn] = sql_model
 
@@ -114,5 +115,4 @@ class SqlMeshCrawler:
                 found_dirs.append(root)
 
         return found_dirs
-
 

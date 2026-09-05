@@ -6,6 +6,9 @@ from sqlglot import exp
 
 class SqlModelInfo(BaseModel):
     name: str
+    table_name: str
+    table_schema: str
+    catalog: str
     file_name: str
     file_path: str
 
@@ -25,6 +28,16 @@ class TableInfo(BaseModel):
     alias:Optional[str]
     fields: frozenset[str]
 
+
+class TableReference(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    table_name:str
+    schema_name:str
+    catalog_name:str
+
+    def get_full_name(self):
+        return '.'.join([n for n in [self.catalog_name, self.schema_name, self.table_name] if n != ''])
+
 @dataclass
 class RawModel:
     name:str
@@ -39,7 +52,7 @@ class Ref(BaseModel):
     refs: Tuple["ColRef|Ref", ...] = ()
 
 class ColRef(Ref):
-    table: str
+    table: TableReference
 
     @model_serializer(mode="wrap")
     def serialize_model(self, handler) -> Dict[str, Any]:
