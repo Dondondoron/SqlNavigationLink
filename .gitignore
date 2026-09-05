@@ -6,3 +6,4 @@ package-lock.json
 __pycache__
 *.vsix
 .venv
+media/lineageViewer/

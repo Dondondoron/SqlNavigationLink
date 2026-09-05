@@ -4,13 +4,13 @@ import { ColumnDetailLineageCreator } from "./CreateColumnDetailedLineage"
 
 
 export class CardColumn implements Column {
-    
+
     name: string
     table?: string
     refs: CardColumn[]
     canvas?: HTMLDivElement
 
-    expanded?:boolean = false
+    expanded?: boolean = false
 
     constructor(column: Column,
         public fieldItem = document.createElement('li')
@@ -133,14 +133,16 @@ export class Card {
     }
 
     reset() {
+        this.hideCard(false)
         const columnDivs = this.fieldsContainer.querySelectorAll('.field-item');
 
         columnDivs.forEach(f => {
             f.classList.remove('selected')
+            f.classList.remove('selected-detailed')
         })
 
-        this.cardColumns.forEach(cc=>{
-            if(cc.canvas){
+        this.cardColumns.forEach(cc => {
+            if (cc.canvas) {
                 cc.canvas.replaceWith(cc.fieldItem)
                 cc.canvas = undefined
                 cc.expanded = false
@@ -157,6 +159,13 @@ export class Card {
         this.showFieldsContainer(!this.containerHidden)
     }
 
+
+    hideCard(isTrue: boolean) {
+        if (isTrue) this.card.classList.add('hidden')
+        else this.card.classList.remove('hidden')
+
+        this.childCards.forEach(cc=>cc.hideCard(isTrue))
+    }
     hideFields() {
         this.fieldsHidden = true;
 
@@ -200,18 +209,32 @@ export class Card {
 
         const cardColumn = this.columnData.get(column)
 
-        
+
         if (cardColumn) {
 
-            const next_targets = new ColumnDetailLineageCreator(this, cardColumn).render(connect, preColumnDiv)
+            const next_targets = new ColumnDetailLineageCreator(this, cardColumn)
+                .render(connect, preColumnDiv)
 
             if (next_targets) {
+
+                Array.from(this.childCards.entries()).forEach(cc => {
+                    
+
+                    if (!next_targets.has(cc[0])) {
+
+                        cc[1].hideCard(true)
+
+                    }
+
+                })
+
                 Array.from(next_targets.entries()).forEach(t => {
 
                     const child = this.childCards.get(t[0])
-                    
-                    if(child){
-                        t[1].forEach(ct=>{
+
+
+                    if (child) {
+                        t[1].forEach(ct => {
 
                             child.showFullLineage(ct.column, connect, ct.element)
                         })
@@ -327,12 +350,12 @@ export class Card {
 
         const nextColumn = col.name;
         const tableName = col.table;
-        const sanitizedTableName = tableName?.replaceAll('"', '')??'';
+        const sanitizedTableName = tableName??.replaceAll('"', '')??'';
 
         if (!nextColumn) return;
 
         const allCards = this.childCards;
-        const targetCard = allCards.get(tableName??'') ?? allCards.get(sanitizedTableName);
+        const targetCard = allCards.get(tableName??''??'') ?? allCards.get(sanitizedTableName??'');
 
 
         if (targetCard) {

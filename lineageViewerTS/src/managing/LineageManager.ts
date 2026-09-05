@@ -31,6 +31,8 @@ export class LineageManager {
     initData(data: LineageInfo) {
 
 
+        this.clearPaths()
+
         const centerContainer = document.getElementById('center-nodes')!;
         const rightContainer = document.getElementById('right-nodes')!;
 
@@ -58,6 +60,7 @@ export class LineageManager {
 
     showLineageOnCard(cardId: string, column: any, detailed: boolean = false) {
 
+        this.clearPaths()
 
         const focusCard = Card.card_stack.get(cardId)
 
@@ -72,6 +75,14 @@ export class LineageManager {
                 if (card !== this.centerCard) card.showFieldsContainer(false)
 
             })
+
+            if(detailed){
+                Card.card_stack.forEach(c=>{
+                    if(!c.isCenter){
+                        c.hideFields()
+                    }
+                })
+            }
 
             const connections = detailed ? focusCard?.showFullLineage(column, [], null) : focusCard?.showLineage(column, [], null)
 

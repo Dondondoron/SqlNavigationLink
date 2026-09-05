@@ -26,7 +26,11 @@ export class ColumnDetailLineageCreator {
         canvas.classList.add('lineage-column-container')
 
         const cardColumn = this.card.cardColumns.get(this.column.name)
-        if (!cardColumn) return
+        if (!cardColumn) {
+            return
+        }
+        
+        cardColumn.fieldItem.classList.remove('hidden')
         if(cardColumn.expanded){
             
             if(preColumnDiv)connect.push({a: cardColumn.fieldItem, b:preColumnDiv})
@@ -36,7 +40,6 @@ export class ColumnDetailLineageCreator {
 
         cardColumn.fieldItem.replaceWith(canvas)
 
-        cardColumn.fieldItem.classList.remove('hidden')
 
 
         cardColumn.canvas = canvas
@@ -44,6 +47,13 @@ export class ColumnDetailLineageCreator {
 
         function recurse(col: Column, element: HTMLElement, prevHeader:Element|null, rootElement?: HTMLElement) {
 
+
+            //Skip duplicates
+            if (col.refs.length === 1 && col.table && col.refs[0].table === col.table && col.refs[0].name === col.name  && !rootElement) {
+                recurse(col.refs[0], element, prevHeader)
+                return
+            }
+            
 
             const innerCanvas = document.createElement('div')
             innerCanvas.classList.add('lineage-column-container', 'full-width')
@@ -53,7 +63,7 @@ export class ColumnDetailLineageCreator {
             const header = rootElement ? rootElement :  document.createElement('li')
             header.textContent = col.name
 
-            header?.classList.add('selected');
+            header?.classList.add('selected-detailed');
 
             if(prevHeader)connect.push({a: header, b:prevHeader})
 
@@ -65,12 +75,26 @@ export class ColumnDetailLineageCreator {
             innerCanvas.appendChild(header)
             innerCanvas.appendChild(childContainer)
 
+            if(!col.table){
+                //Function or Literal
+
+                if(col.name.startsWith('literal:') || col.name === 'null'){
+                    header.classList.add('literal')
+                }else{
+                    header.classList.add('func')
+                }
+            }
+
+
 
             if(col.refs.length === 0){
+                // Remove margin on the left edge.
                 header.style.marginLeft = '0px'
             }
-            
+
             if (col.refs.length === 0 && col.table) {
+
+                header.classList.add('outer-table-ref')
 
                     if(nextTargets.has(col.table))
                         nextTargets.get(col.table)?.add(createTarget(col.name, header))
@@ -84,9 +108,11 @@ export class ColumnDetailLineageCreator {
                 // CTE or SubQuery
 
                 header.textContent = col.table + '.' + col.name
+                header.classList.add('inner-table-ref')
             }
             else if (col.refs.length === 0 && !col.table) {
                 // Leaf
+
             }
 
             col.refs.forEach(r => {
