@@ -23,9 +23,7 @@ Zoomer.getInstance().mouseClick = mouseClicker
 
 
 export function renderLineage(data: LineageInfo) {
-    const leftContainer = document.getElementById('left-nodes')!;
-    const centerContainer = document.getElementById('center-nodes')!;
-    const rightContainer = document.getElementById('right-nodes')!;
+    
 
     const leftSizeLabel = document.getElementById('left-lineage-size-label')!;
 
@@ -35,11 +33,6 @@ export function renderLineage(data: LineageInfo) {
 
     rightSizeLabel.textContent = data.size_right
 
-
-    // Clear previous content
-    leftContainer.innerHTML = '';
-    centerContainer.innerHTML = '';
-    rightContainer.innerHTML = '';
 
     lineageManager.initData(data)
 

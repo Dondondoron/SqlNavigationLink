@@ -47,6 +47,7 @@ export class Card {
     cardColumns: Map<string, CardColumn> = new Map()
 
     constructor(model: ModelLineage, isCenter = false, direction: "left" | "right" = 'left', parent: Card | undefined = undefined,
+        leftContainer?: HTMLElement|undefined,
         public cardContainer = document.createElement('div'),
         public card = document.createElement('div'),
         public cardHeader = document.createElement('header'),
@@ -122,8 +123,7 @@ export class Card {
             const newCard = new Card(ref, false, direction, this);
             this.childCards.set(ref.model.name.replaceAll('"', ''), newCard)
 
-            if (this.isCenter) {
-                const leftContainer = document.getElementById('left-nodes')!;
+            if (this.isCenter && leftContainer) {
                 leftContainer.appendChild(newCard.cardContainer)
             }
             else childCardContainer.appendChild(newCard.cardContainer)

@@ -3,14 +3,89 @@ import { Card } from "./Card";
 import { Zoomer } from "./lineage-zoom";
 
 
+interface ColumnConfig {
+    id: string;
+    title: string;
+    nodesId: string;
+}
 
+class ModelStructure {
+    private sectionElement: HTMLDivElement;
+    private nodeContainers: Map<string, HTMLElement> = new Map();
 
+    constructor() {
+        this.sectionElement = this.buildStructure();
+    }
+
+    private buildStructure(): HTMLDivElement {
+        const columns: ColumnConfig[] = [
+            { id: 'left-col', title: 'Upstream (Refs)', nodesId: 'left-nodes' },
+            { id: 'center-col', title: 'Current Model', nodesId: 'center-nodes' },
+            { id: 'right-col', title: 'Downstream (Referenced By)', nodesId: 'right-nodes' }
+        ];
+
+        const section = document.createElement('div');
+        section.className = 'section';
+
+        columns.forEach(col => {
+            const columnDiv = document.createElement('div');
+            columnDiv.className = 'column';
+            columnDiv.id = col.id;
+
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'col-title';
+            titleDiv.textContent = col.title;
+
+            const nodesDiv = document.createElement('div');
+            nodesDiv.className = 'nodes';
+            nodesDiv.id = col.nodesId;
+
+            columnDiv.appendChild(titleDiv);
+            columnDiv.appendChild(nodesDiv);
+            section.appendChild(columnDiv);
+
+            // Cache reference for easier node insertion later
+            this.nodeContainers.set(col.nodesId, nodesDiv);
+        });
+
+        return section;
+    }
+
+    /**
+     * Mounts the structure into a target DOM container.
+     */
+    public mount(containerId: string): void {
+        const parent = document.getElementById(containerId);
+        if (parent) {
+            parent.appendChild(this.sectionElement);
+        } else {
+            console.error(`Container with ID "${containerId}" not found.`);
+        }
+    }
+
+    /**
+     * Retrieves a specific nodes container element by its ID (e.g., 'left-nodes').
+     */
+    public getNodeContainer(nodesId: string): HTMLElement | undefined {
+        return this.nodeContainers.get(nodesId);
+    }
+
+    /**
+     * Returns the main section element.
+     */
+    public getElement(): HTMLDivElement {
+        return this.sectionElement;
+    }
+}
 
 export class LineageManager {
 
 
 
     centerCard?: Card
+
+
+    structures: ModelStructure[] = []
 
     svg: SVGElement
     connections: { a: Element; b: Element; }[] = [];
@@ -24,43 +99,63 @@ export class LineageManager {
         const lineageArea = document.getElementById('lineage-container')!
 
 
+
         lineageArea.appendChild(this.svg)
     }
 
 
     initData(data: LineageInfo) {
 
+        this.structures.forEach(structure => {
+            structure.getElement().remove()
+        })
+        this.structures = []
 
         this.clearPaths()
 
-        const centerContainer = document.getElementById('center-nodes')!;
-        const rightContainer = document.getElementById('right-nodes')!;
-
         Card.card_stack.clear()
 
-        // Center Node
 
-        const centerCard = new Card(data.centerModel, true)
-        this.centerCard = centerCard
-        centerContainer.appendChild(centerCard.cardContainer);
+        data.centerModels.forEach(centerModel => {
+
+            const modelStructure = new ModelStructure()
+
+            modelStructure.mount('lineage-container')
+
+            this.structures.push(modelStructure)
 
 
-        // Right Nodes
-        if (data.rightRefs && data.rightRefs.length > 0) {
-            data.rightRefs.forEach((ref: any) => {
-                const rightCard = new Card(ref, false, 'right', centerCard);
-                centerCard.childCards.set(rightCard.id, rightCard)
-                rightContainer.appendChild(rightCard.cardContainer);
-            });
-        } else {
-            rightContainer.innerHTML = '<div class="empty-state">None</div>';
-        }
+            const centerContainer = modelStructure.getNodeContainer('center-nodes')!;
+            const rightContainer = modelStructure.getNodeContainer('right-nodes')!;
+            const leftContainer = modelStructure.getNodeContainer('left-nodes')!;
+
+            // Center Node
+
+            const centerCard = new Card(centerModel, true, undefined, undefined, leftContainer)
+            this.centerCard = centerCard
+            centerContainer.appendChild(centerCard.cardContainer);
+
+
+            // Right Nodes
+            if (centerModel.rightRefs && centerModel.rightRefs.length > 0) {
+                centerModel.rightRefs.forEach((ref: any) => {
+                    const rightCard = new Card(ref, false, 'right', centerCard);
+                    centerCard.childCards.set(rightCard.id, rightCard)
+                    rightContainer.appendChild(rightCard.cardContainer);
+                });
+            } else {
+                rightContainer.innerHTML = '<div class="empty-state">None</div>';
+            }
+
+
+        })
 
     }
 
     showLineageOnCard(cardId: string, column: any, detailed: boolean = false) {
 
         this.clearPaths()
+
 
         const focusCard = Card.card_stack.get(cardId)
 
@@ -72,13 +167,13 @@ export class LineageManager {
 
             Card.card_stack.forEach(card => {
                 card.reset()
-                if (card !== this.centerCard) card.showFieldsContainer(false)
+                if (!card.isCenter) card.showFieldsContainer(false)
 
             })
 
-            if(detailed){
-                Card.card_stack.forEach(c=>{
-                    if(!c.isCenter){
+            if (detailed) {
+                Card.card_stack.forEach(c => {
+                    if (!c.isCenter) {
                         c.hideFields()
                     }
                 })

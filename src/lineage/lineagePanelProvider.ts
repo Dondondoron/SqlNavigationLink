@@ -87,27 +87,21 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        const model = Array.from(models)[0]
-
         this.currentUri = uri
 
+        const centerModels = Array.from(models).map(m => {
 
+            return {
+                model: m,
+                refs: this.getLeftReferences(arrayedModels, m),
+                rightRefs: this.getRightRefs(arrayedModels, m)
+            }
 
-
-        const rightRefs: ModelLineage[] = this.getRightRefs(arrayedModels, model);
-
-
-
-        const centerModel: ModelLineage = {
-            model: model,
-            refs: this.getLeftReferences(arrayedModels, model)
-
-        }
+        })
 
 
         const data: LineageInfo = {
-            centerModel: centerModel,
-            rightRefs: rightRefs,
+            centerModels: centerModels,
             size_left: this.currentLeftDepth.toString(),
             size_right: this.currentRightDepth.toString()
         }

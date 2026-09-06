@@ -17,15 +17,14 @@ export interface SqlModelInfo{
 export interface ModelLineage {
     model: SqlModelInfo 
     refs?: ModelLineage[]
+    rightRefs?: ModelLineage[]
     fields?: string[]
 }
 
 
 
 export interface LineageInfo{
-
-            centerModel:ModelLineage
-            rightRefs: ModelLineage[]
+            centerModels:ModelLineage[]
             size_left: string
             size_right: string
         
