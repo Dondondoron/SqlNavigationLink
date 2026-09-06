@@ -101,6 +101,8 @@ button:hover {
     align-content: center;
     display: flex;
     flex-wrap: nowrap;
+    width: 100%;
+    justify-content: space-between;
 }
 
 .node-card header span{
@@ -129,7 +131,7 @@ button:hover {
     flex-direction: row;
     justify-content: center;
     width: fit-content;
-    border: 1px solid var(--vscode-widget-border, #333);
+    /*border: 1px solid var(--vscode-widget-border, #333);*/
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     margin: 1px;
 }
@@ -160,7 +162,6 @@ button:hover {
 
 
 .node-card.center {
-    background: var(--vscode-button-secondaryBackground, #2b2b2b);
     font-weight: bold;
 }
 
@@ -172,7 +173,7 @@ button:hover {
     align-items: flex-start;
     list-style: inside;
     padding: 0;
-    margin: 6px 0px;
+    margin: 0px 0px;
     font-family: var(--vscode-editor-font-family, monospace);
 }
 

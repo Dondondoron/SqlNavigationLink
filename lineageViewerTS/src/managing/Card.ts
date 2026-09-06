@@ -70,6 +70,7 @@ export class Card {
 
         cardContainer.dataset.card = name
         cardContainer.dataset.id = id
+        cardContainer.dataset.direction = this.direction
 
         titleSpan.textContent = name
 
@@ -267,8 +268,6 @@ export class Card {
             connect.push({ a: columnDiv, b: preColumnDiv })
         }
 
-        debugger
-
 
         if (this.direction === 'center' && columnDiv) {
             // Define a recursive helper function to process a card and traverse its right-side children
@@ -289,7 +288,7 @@ export class Card {
                         return leaf.column.table === targetTable && leaf.column.name === targetColumn
                     })
                     .forEach(leaf => {
-                        const inoCa = card.cardColumns.get(leaf.parent?.name??'');
+                        const inoCa = card.cardColumns.get(leaf.root?.name??'');
                         if (inoCa && currentColumnDiv) {
                             inoCa.fieldItem.classList.add('selected');
                             inoCa.fieldItem.classList.remove('hidden');
@@ -302,7 +301,7 @@ export class Card {
                             if (card.childCards) {
                                 card.childCards.forEach(innerCard => {
                                     if (innerCard.direction === 'right') {
-                                        traverseRightCards(innerCard, card.table, leaf.parent?.name??'', inoCa.fieldItem);
+                                        traverseRightCards(innerCard, card.table, leaf.root?.name??'', inoCa.fieldItem);
                                     }
                                 });
                             }
@@ -336,10 +335,10 @@ export class Card {
     }
 
 
-    private getLeafColumnsWithParent(columndata: Column[], cols: {column: Column, parent: Column | undefined}[] = [], first_boolean:boolean = true, parentColumn?: Column) {
+    private getLeafColumnsWithParent(columndata: Column[], cols: {column: Column, root: Column | undefined}[] = [], first_boolean:boolean = true, parentColumn?: Column) {
         columndata.forEach(cd => {
             if (cd.refs.length === 0 && cd.table) {
-                cols.push({ column: cd, parent: parentColumn })
+                cols.push({ column: cd, root: parentColumn })
             } else {
                 this.getLeafColumnsWithParent(cd.refs, cols, false, first_boolean ? cd : parentColumn)
             }

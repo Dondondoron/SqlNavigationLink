@@ -62,6 +62,7 @@ export class MouseClicker {
         if (columnItem instanceof HTMLElement) {
 
             const cardContainer = e.target.closest('.card_container') as any
+            if(cardContainer.dataset.direction !== 'center')return
             const column = columnItem.dataset.column
 
             this.lineageManager.showLineageOnCard(cardContainer?.dataset.id!, column, e.ctrlKey)
