@@ -81,11 +81,13 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
 
         const allModels = this.modelProvider.models;
         const arrayedModels = Array.from(allModels.values())
-        const model = allModels.get(uri.fsPath);
+        const models = this.modelProvider.pathToModel.get(uri.fsPath);
 
-        if (!model) {
+        if (!models || models.size === 0) {
             return;
         }
+
+        const model = Array.from(models)[0]
 
         this.currentUri = uri
 

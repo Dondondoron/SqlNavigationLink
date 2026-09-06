@@ -32,6 +32,8 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
 
     private treeItems: Map<string, vscode.TreeItem> = new Map()
     models: Map<string, SqlModelInfoTree> = new Map()
+    pathToModel: Map<string, Set<SqlModelInfoTree>> = new Map()
+    modelToPath: Map<string, string> = new Map()
 
 
     private makeTreeItem(label: string, collapsed: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.Collapsed): vscode.TreeItem {
@@ -64,17 +66,30 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
 
     initModels(models: SqlModelsResponse) {
 
-        Object.entries(models).forEach(m =>
-            this.models.set(
-                vscode.Uri.file(m[1].file_path).fsPath,
-                new SqlModelInfoTree(
-                    m[1].name,
-                    m[1].file_name,
-                    m[1].file_path,
-                    m[1].table_names,
-                    m[1].columns
-                )
+        Object.entries(models).forEach(m => {
+            const treeItem = new SqlModelInfoTree(
+                m[1].name,
+                m[1].file_name,
+                m[1].file_path,
+                m[1].table_names,
+                m[1].columns
             )
+
+            const path = vscode.Uri.file(m[1].file_path).fsPath
+
+            if(!this.pathToModel.has(path)){
+                this.pathToModel.set(path, new Set())
+            }
+            this.pathToModel.get(path)?.add(treeItem)
+            this.models.set(
+                m[1].name,
+                treeItem
+            )
+            this.modelToPath.set(
+                m[1].name,
+                m[1].file_path
+            )
+        }
         )
 
         this._onDidChangeTreeData.fire()
@@ -87,7 +102,7 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
     }
 
 
-    
+
 
 
 }

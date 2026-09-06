@@ -103,15 +103,15 @@ export class MainController {
                 vscode.window.showErrorMessage('No model name provided to open.');
                 return;
             }
-            const normalizedModelName = modelName.replaceAll('"', '')
-            const model = Array.from(this.sqlModelProvider.models).find(m => m[1].name.replaceAll('"', '') === normalizedModelName)
-            if (!model) {
+        
+            const modelPath = this.sqlModelProvider.modelToPath.get(modelName)
+            if (!modelPath) {
                 vscode.window.showErrorMessage('No model with name ' + modelName + ' found');
                 return;
             }
             try {
 
-                const uri = vscode.Uri.file(model[0]);
+                const uri = vscode.Uri.file(modelPath);
 
                 // 2. Open the document and show it in the editor
                 const doc = await vscode.workspace.openTextDocument(uri);
