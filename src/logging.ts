@@ -3,11 +3,17 @@ import * as vscode from 'vscode';
 
 const outputChannel = vscode.window.createOutputChannel('SQL Nav Link');
 
-export function logInformation(message: string) {
+export function logMessage(message: string) {
 
   console.log(message);
   outputChannel.appendLine(message);
   vscode.window.showInformationMessage(message);
+}
+
+export function logInformation(message: string) {
+
+  console.log(message);
+  outputChannel.appendLine(message);
 }
 
 export function logError(message: string, error?:unknown) {

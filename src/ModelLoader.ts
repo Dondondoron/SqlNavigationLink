@@ -4,12 +4,12 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fsp from 'fs/promises'
 import { SqlModelsResponse } from "./domain/domain";
-import { logError, logInformation } from "./logging";
+import { logError, logInformation, logMessage } from "./logging";
 import { getSafeFileNameForPath } from "./utils";
 
 import * as os from 'os';
 import * as fs from 'fs';
-import { execFile } from "child_process";
+import { spawn } from "child_process";
 import { SqlModelProvider } from "./modelProvider";
 
 
@@ -27,7 +27,7 @@ export class ModelLoader {
             .getConfiguration('Dondondoron.sql-nav-link')
             .get('saveCache', false);
 
-        logInformation("Starting the parsing of files from python env: " + pythonPath)
+        logMessage("Starting the parsing of files from python env: " + pythonPath)
 
         const scriptPath = path.join(this.context.extensionPath, 'scripts', 'run_crawler.py');
 
@@ -41,39 +41,49 @@ export class ModelLoader {
                 fs.unlink(tempFilePath, () => { }); // Silent cleanup attempt
             };
 
-            execFile(
+            const pythonProcess = spawn(
                 pythonPath,
                 [scriptPath, tempFilePath, tempFileName, targetPath, type],
-                { maxBuffer: 1024 * 1024 * 10, cwd: targetPath }, 
-                (error: any, stdout: any, stderr: any) => {
-                    if (error) {
-                        logError(`SQL Scanner Error: ${stderr || error.message}`, error.message)
+                { cwd: targetPath }
+            );
+
+            // Capture stdout in runtime
+            pythonProcess.stdout.on('data', (data) => {
+                const output = data.toString();
+                logMessage(`[py]: ${output.trim()}`);
+            });
+
+            // Capture stderr in runtime
+            pythonProcess.stderr.on('data', (data) => {
+                const errorOutput = data.toString();
+                logError(`[py error]: ${errorOutput.trim()}`);
+            });
+
+            // Handle process completion and file reading
+            pythonProcess.on('close', (code) => {
+                if (code !== 0) {
+                    logError(`SQL Scanner Process exited with code ${code}`);
+                    return resolve(undefined);
+                }
+
+                fs.readFile(fullTarget, 'utf-8', (readErr, rawData) => {
+                    if (!saveCache) cleanup();
+
+                    if (readErr) {
+                        logError(`SQL Scanner Error: Could not read temporary output file.`);
+                        return resolve(undefined);
                     }
 
-                    fs.readFile(fullTarget, 'utf-8', (readErr, rawData) => {
-                        if (!saveCache) cleanup();
-
-                        if (readErr) {
-                            logError(`SQL Scanner Error: Could not read temporary output file.`)
-                            return resolve(undefined);
-                        }
-
-                        try {
-                            const models: SqlModelsResponse = JSON.parse(rawData);
-
-
-                            logInformation(
-                                "Successfully parsed " + Object.keys(models).length + " SQL files"
-                            );
-
-                            resolve(models);
-                        } catch (e) {
-                            logError("Failed to parse Python JSON output");
-                            resolve(undefined);
-                        }
-                    });
-                }
-            );
+                    try {
+                        const models: SqlModelsResponse = JSON.parse(rawData);
+                        logMessage("Successfully parsed " + Object.keys(models).length + " SQL files");
+                        resolve(models);
+                    } catch (e) {
+                        logError("Failed to parse Python JSON output");
+                        resolve(undefined);
+                    }
+                });
+            });;
         });
     }
 
