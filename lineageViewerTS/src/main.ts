@@ -15,7 +15,7 @@ const vscode = getVsCodeApi();
 
 
 document.addEventListener('DOMContentLoaded', () => {
-    if(isMock)renderLineage(testData)
+    if(isMock)renderLineage(testDataReverse)
 });
 
 

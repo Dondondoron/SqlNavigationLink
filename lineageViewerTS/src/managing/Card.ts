@@ -267,6 +267,8 @@ export class Card {
             connect.push({ a: columnDiv, b: preColumnDiv })
         }
 
+        debugger
+
 
         if (this.direction === 'center' && columnDiv) {
             // Define a recursive helper function to process a card and traverse its right-side children
@@ -279,15 +281,15 @@ export class Card {
                     currentColumnDiv?.classList.add('selected');
                 }
 
-                const leafs = this.getLeafColumns(Array.from(card.columnData.values()))
+                const leafs = this.getLeafColumnsWithParent(Array.from(card.columnData.values()))
 
                 // 1. Process column data for the current card
                 Array.from(leafs)
-                    .filter(f => {
-                        return f.table === targetTable && f.name === targetColumn
+                    .filter(leaf => {
+                        return leaf.column.table === targetTable && leaf.column.name === targetColumn
                     })
-                    .forEach(coco => {
-                        const inoCa = card.cardColumns.get(coco.name);
+                    .forEach(leaf => {
+                        const inoCa = card.cardColumns.get(leaf.parent?.name??'');
                         if (inoCa && currentColumnDiv) {
                             inoCa.fieldItem.classList.add('selected');
                             inoCa.fieldItem.classList.remove('hidden');
@@ -300,7 +302,7 @@ export class Card {
                             if (card.childCards) {
                                 card.childCards.forEach(innerCard => {
                                     if (innerCard.direction === 'right') {
-                                        traverseRightCards(innerCard, card.table, coco.name, inoCa.fieldItem);
+                                        traverseRightCards(innerCard, card.table, leaf.parent?.name??'', inoCa.fieldItem);
                                     }
                                 });
                             }
@@ -331,6 +333,19 @@ export class Card {
         ;
 
         return connect
+    }
+
+
+    private getLeafColumnsWithParent(columndata: Column[], cols: {column: Column, parent: Column | undefined}[] = [], first_boolean:boolean = true, parentColumn?: Column) {
+        columndata.forEach(cd => {
+            if (cd.refs.length === 0 && cd.table) {
+                cols.push({ column: cd, parent: parentColumn })
+            } else {
+                this.getLeafColumnsWithParent(cd.refs, cols, false, first_boolean ? cd : parentColumn)
+            }
+
+        })
+        return cols
     }
 
 
