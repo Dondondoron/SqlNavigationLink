@@ -27,7 +27,6 @@ export class ModelLoader {
             .getConfiguration('Dondondoron.sql-nav-link')
             .get('saveCache', false);
 
-        logMessage("Starting the parsing of files from python env: " + pythonPath)
 
         const scriptPath = path.join(this.context.extensionPath, 'scripts', 'run_crawler.py');
 
@@ -35,10 +34,10 @@ export class ModelLoader {
             // 1. Create a unique temporary file path
             const tempFileName = saveCache ? getSafeFileNameForPath(targetPath) : `sql_scanner_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.json`;
             const tempFilePath = saveCache ? this.getCacheUri().fsPath : os.tmpdir();
-            const fullTarget = path.join(tempFilePath, tempFileName)
+            const fullTarget = path.join(tempFilePath, tempFileName);
 
             const cleanup = () => {
-                fs.unlink(tempFilePath, () => { }); // Silent cleanup attempt
+                fs.unlink(fullTarget, () => { }); // Fixed to target the actual file
             };
 
             // Get total system memory in bytes and calculate 80%
@@ -48,23 +47,53 @@ export class ModelLoader {
 
             // 2. Calculate CPU Quota (80% of total aggregate core power)
             const coreCount = os.cpus().length;
-            // Each core represents 100% capacity in systemd-run. 
-            // Multiplying core count by 80 gives exactly 80% of total system CPU capacity.
             const cpuQuotaPercentage = coreCount * 80;
 
-            const pythonProcess = spawn('systemd-run', [
-                '--user',
-                '--scope',
-                '-p', `MemoryMax=${targetMemoryMb}M`,
-                '-p', `CPUQuota=${cpuQuotaPercentage}%`,
-                '-p', 'MemorySwapMax=0',
-                pythonPath,
-                scriptPath,
-                tempFilePath,
-                tempFileName,
-                targetPath,
-                type
-            ], { cwd: targetPath });
+            const osPlatform = os.platform();
+
+            logMessage("Starting the parsing of files from python env: " + pythonPath + " with target path: " 
+                + targetPath + " with type: " + type 
+                + " \n With total memory: " + totalMemoryBytes 
+                + " bytes, target memory: " + targetMemoryBytes 
+                + " bytes, CPU cores: " + coreCount 
+                + ", CPU quota: " + cpuQuotaPercentage + "%"
+                + ", Linux platform: " + osPlatform
+            );
+
+            // 3. Platform-aware process configuration
+            const isLinux = osPlatform === 'linux';
+            let command: string;
+            let args: string[];
+
+            if (isLinux) {
+                // Linux: Use systemd-run to enforce hard resource limits and protect SSH
+                command = 'systemd-run';
+                args = [
+                    '--user',
+                    '--scope',
+                    '-p', `MemoryMax=${targetMemoryMb}M`,
+                    '-p', `CPUQuota=${cpuQuotaPercentage}%`,
+                    '-p', 'MemorySwapMax=0',
+                    pythonPath,
+                    scriptPath,
+                    tempFilePath,
+                    tempFileName,
+                    targetPath,
+                    type
+                ];
+            } else {
+                // Windows / macOS: Fall back to executing Python directly
+                command = pythonPath;
+                args = [
+                    scriptPath,
+                    tempFilePath,
+                    tempFileName,
+                    targetPath,
+                    type
+                ];
+            }
+
+            const pythonProcess = spawn(command, args, { cwd: targetPath });
 
             // Capture stdout in runtime
             pythonProcess.stdout.on('data', (data) => {
@@ -102,7 +131,7 @@ export class ModelLoader {
                         resolve(undefined);
                     }
                 });
-            });;
+            });
         });
     }
 
