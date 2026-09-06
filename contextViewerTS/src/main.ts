@@ -47,6 +47,12 @@ window.addEventListener('message', (event: MessageEvent<IncomingMessage>) => {
             checkbox.checked = message.data;
         }
     }
+    if (message.command === 'setSaveCacheCheckbox') {
+        const checkbox = document.getElementById('cacheContext') as HTMLInputElement | null;
+        if (checkbox) {
+            checkbox.checked = message.data;
+        }
+    }
 });
 
 

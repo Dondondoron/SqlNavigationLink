@@ -50,6 +50,7 @@ export class MainController {
 
         if (savedCache) {
             this.modelLoader.loadAllCache(this.parseView.pathObjects.map(p => p.filePath))
+            this.parseView.refreshSaveCache()
 
         }
         else if (autoLoadContext) {
@@ -162,7 +163,7 @@ export class MainController {
             pythonEnv.pythonExecutable,
             targetContext.rootPath,
             targetContext.type,
-            targetContext.configPaths ? Array.from(targetContext.configPaths) : [targetContext.rootPath]);
+            targetContext.configPaths && targetContext.configPaths.size > 0 ? Array.from(targetContext.configPaths) : [targetContext.rootPath]);
 
         if (models) this.sqlModelProvider.initModels(models);
     }
@@ -185,6 +186,9 @@ export class MainController {
             }
             else if (event.affectsConfiguration('Dondondoron.sql-nav-link.autoContext')) {
                 this.parseView.refreshAutoContext()
+            }
+            else if (event.affectsConfiguration('Dondondoron.sql-nav-link.saveCache')) {
+                this.parseView.refreshSaveCache()
             }
         })
     }

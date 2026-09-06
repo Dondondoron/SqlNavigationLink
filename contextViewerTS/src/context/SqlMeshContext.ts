@@ -65,9 +65,12 @@ export class ContextItem {
         removeContextButton.dataset.value = data.rootPath
         
         
-        const typeSpan = document.createElement('span')
-        typeSpan.textContent = data.type
-        rightSideHeader.appendChild(typeSpan)
+        const typeButton = document.createElement('button')
+        typeButton.classList.add('secondary')
+        typeButton.dataset.value = data.rootPath
+        typeButton.dataset.action = 'changePathType'
+        typeButton.textContent = data.type
+        rightSideHeader.appendChild(typeButton)
         rightSideHeader.appendChild(removeContextButton)
 
         const parseContextButton = document.createElement('button')

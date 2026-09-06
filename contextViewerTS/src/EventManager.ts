@@ -55,6 +55,13 @@ export class EventManager {
             return;
         }
 
+        const cacheCheckbox = target.closest('#cacheContext') as HTMLInputElement | null;
+        if (cacheCheckbox) {
+            e.stopPropagation();
+            Utility.post('cache', cacheCheckbox.checked);
+            return;
+        }
+
         const pyPkgSection = target.closest('.py-pkg-section');
         if (pyPkgSection) return;
 

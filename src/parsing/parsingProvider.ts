@@ -7,7 +7,7 @@ import { logInformation } from '../logging';
 
 
 export interface GenericContext {
-    type: string;
+    type: SqlType;
     rootPath: string
 }
 
@@ -116,15 +116,8 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
                     vscode.commands.executeCommand('sql-nav-link.parsePaths', data.args[0])
                     break;
                 case "removeContext":
-                    const contextIndex = this.contextItems.findIndex(item => item.rootPath === data.args[0])
-
-                    this.contextItems.splice(contextIndex, 1)
-
-                    this.refreshContexts()
-
-                    break;
                 case "removePath":
-                    await this.removePathCommand(data.args[0])
+                    await this.removeContextCommand(data.args[0])
                     break;
                 case "removeConfigPath":
                     const path = data.args[0]
@@ -160,14 +153,26 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
                         vscode.ConfigurationTarget.Global
                     );
                     break;
+                case "cache":
+                    const checkboxValueCache = Boolean(data.args[0]);
+
+                    const cacheConfig = vscode.workspace.getConfiguration('Dondondoron.sql-nav-link');
+
+                    await cacheConfig.update(
+                        'saveCache',
+                        checkboxValueCache,
+                        vscode.ConfigurationTarget.Global
+                    );
+                    break;
             }
         });
 
         webviewView.onDidChangeVisibility((e) => {
             if (webviewView.visible) {
 
-                this.updatePaths()
                 this.updatePython()
+                this.refreshContexts()
+                this.refreshSaveCache()
                 this.refreshAutoContext()
 
 
@@ -182,10 +187,10 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
 
-        this.updatePaths()
         this.refreshContexts()
         this.updatePython()
         this.refreshAutoContext()
+        this.refreshSaveCache()
 
     }
 
@@ -205,6 +210,22 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
 
     }
 
+    refreshSaveCache() {
+        const isTrue = vscode.workspace
+            .getConfiguration('Dondondoron.sql-nav-link')
+            .get('saveCache', false);
+
+
+        if (!this._view) {
+            return;
+        }
+        this._view.webview.postMessage({
+            command: 'setSaveCacheCheckbox',
+            data: isTrue
+        });
+
+    }
+
     getSafeContext() {
         return this.contextItems.map(item => ({
             ...item,
@@ -220,21 +241,12 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
 
         const safeContextItems = this.getSafeContext()
 
-        
+
         this.saveContexts(safeContextItems)
 
         this._view.webview.postMessage({
             command: 'updateContexts',
             data: safeContextItems
-        });
-    }
-    updatePaths() {
-        if (!this._view) {
-            return;
-        }
-        this._view.webview.postMessage({
-            command: 'updatePaths',
-            data: this.pathObjects
         });
     }
     updatePython() {
@@ -308,23 +320,21 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
 
                 if (!type) return
 
-                const newPathObj: PathObject = {
-                    id: Date.now().toString(),
-                    label: selectedUri.fsPath,
-                    filePath: selectedUri.fsPath,
-                    type: type as SqlType
+                const newPathObj: SQLMeshContext = {
+                    rootPath: selectedUri.fsPath,
+                    type: type as SqlType,
+                    configPaths: new Set()
                 };
 
-                this.pathObjects.push(newPathObj)
+                this.contextItems.push(newPathObj)
 
-                this.updatePaths()
-                this.savePaths()
+                this.refreshContexts()
             }
         )
     }
 
 
-    async removePathCommand(arg: any) {
+    async removeContextCommand(rootPath: any) {
 
         const confirm = await vscode.window.showQuickPick(
             [
@@ -332,23 +342,23 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
                 'No'
             ],
             {
-                title: `Remove Path of ${arg}`,
-                placeHolder: `Remove Path of ${arg}`
+                title: `Remove Path of ${rootPath}`,
+                placeHolder: `Remove Path of ${rootPath}`
 
             }
         );
         if (confirm === 'Yes') {
-            for (let i = this.pathObjects.length - 1; i >= 0; i--) {
-                if (this.pathObjects[i].filePath === arg) {
-                    this.pathObjects.splice(i, 1);
-                }
-            }
-            this.updatePaths()
-            this.savePaths()
+
+            const contextIndex = this.contextItems.findIndex(item => item.rootPath === rootPath)
+
+            if (contextIndex >= 0)
+                this.contextItems.splice(contextIndex, 1)
+
+            this.refreshContexts()
         }
     }
     async changePathTypeCommand(arg: any) {
-        const node = this.pathObjects.find(path => path.filePath === arg)
+        const node = this.contextItems.find(path => path.rootPath === arg)
         if (node) {
             const type = await vscode.window.showQuickPick(
                 [
@@ -365,16 +375,10 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
 
             node.type = type as SqlType
 
-
-            this.updatePaths()
-
-            this.savePaths()
+            this.refreshContexts()
         }
     }
 
-    async savePaths() {
-        this.context.globalState.update('sql-nav-link-' + vscode.workspace.name + 'paths', this.pathObjects);
-    }
     saveContexts(safeContexts: any) {
         this.context.globalState.update('sql-nav-link-' + vscode.workspace.name + '-contexts', safeContexts);
     }
