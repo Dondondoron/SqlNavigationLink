@@ -34,7 +34,7 @@ export async function activate(context: vscode.ExtensionContext) {
     addPathCommand,
     mainController.openPathCommand(),
     mainController.openModelCommand(),
-    mainController.parseCommand(context),
+    mainController.parseCommand(),
     mainController.fileOpenListener(),
     mainController.updatePythonEnvironmentCommand(),
     vscode.window.registerTreeDataProvider("sql-nav-link.modelTree", mainController.sqlModelProvider),

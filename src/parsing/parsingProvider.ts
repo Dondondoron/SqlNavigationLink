@@ -6,6 +6,17 @@ import { PythonSupplier } from '../pythonSupplier';
 import { logInformation } from '../logging';
 
 
+export interface GenericContext {
+    type: string;
+    rootPath: string
+}
+
+export interface SQLMeshContext extends GenericContext {
+    configPaths?: Set<string>
+}
+export interface DBTContext extends GenericContext {
+}
+
 export class ParseViewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
 
@@ -13,20 +24,26 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
 
     pathObjects: PathObject[] = [];
 
+    contextItems: SQLMeshContext[] = [];
+
     pythonSupplier: PythonSupplier
 
 
     constructor(
         pythonSupplier: PythonSupplier,
         private context: vscode.ExtensionContext,
-        initialPaths?: PathObject[]
     ) {
         this.pythonSupplier = pythonSupplier
-        if (initialPaths) {
-            this.pathObjects = initialPaths;
-        }
 
 
+        const rawContexts = this.context.globalState.get<any[]>(
+            'sql-nav-link-' + vscode.workspace.name + '-contexts'
+        ) ?? [];
+
+        this.contextItems = rawContexts.map(item => ({
+            ...item,
+            configPaths: new Set(item.configPaths ?? [])
+        }));
 
     }
 
@@ -39,13 +56,86 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
 
             switch (data.command) {
                 case "addPath":
-                    await vscode.commands.executeCommand('sql-nav-link.addPath', data.args[0])
+                    vscode.commands.executeCommand('sql-nav-link.parsePaths', data.args[0])
+
+
+
+
+                    break;
+                case "requestRootPath":
+                    const fileUris = await vscode.window.showOpenDialog({
+                        canSelectFiles: false,
+                        canSelectFolders: true,
+                        canSelectMany: false,
+                        openLabel: 'Select Path'
+                    });
+
+                    if (!fileUris || fileUris.length === 0) {
+                        return;
+                    }
+
+                    const selectedUri = fileUris[0];
+
+                    const dataType = data.args[0];
+
+                    const configPaths: Set<string> = new Set()
+
+                    const contextObject = { type: dataType, rootPath: selectedUri.fsPath, configPaths: configPaths }
+
+                    this.contextItems.push(contextObject)
+
+                    this.refreshContexts()
+
+                    break;
+                case "addConfigPath":
+                    const fileUriss = await vscode.window.showOpenDialog({
+                        canSelectFiles: false,
+                        canSelectFolders: true,
+                        canSelectMany: false,
+                        openLabel: 'Select Path'
+                    });
+
+                    if (!fileUriss || fileUriss.length === 0) {
+                        return;
+                    }
+
+                    const selectedUriConfig = fileUriss[0];
+
+                    const contextItem = this.contextItems.find(item => item.rootPath === data.args[0] && item.type === "SQLMESH") as SQLMeshContext
+
+                    if (contextItem.configPaths) {
+                        contextItem.configPaths.add(selectedUriConfig.fsPath)
+                    } else {
+                        contextItem.configPaths = new Set([selectedUriConfig.fsPath])
+                    }
+
+                    this.refreshContexts()
+
                     break;
                 case "parsePath":
                     vscode.commands.executeCommand('sql-nav-link.parsePaths', data.args[0])
                     break;
+                case "removeContext":
+                    const contextIndex = this.contextItems.findIndex(item => item.rootPath === data.args[0])
+
+                    this.contextItems.splice(contextIndex, 1)
+
+                    this.refreshContexts()
+
+                    break;
                 case "removePath":
                     await this.removePathCommand(data.args[0])
+                    break;
+                case "removeConfigPath":
+                    const path = data.args[0]
+                    const rootPath = data.args[1]
+
+                    const contextItemm = this.contextItems.find(item => item.rootPath === rootPath) as SQLMeshContext
+
+                    contextItemm.configPaths?.delete(path)
+
+                    this.refreshContexts()
+
                     break;
                 case "changePathType":
                     await this.changePathTypeCommand(data.args[0])
@@ -93,6 +183,7 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
 
 
         this.updatePaths()
+        this.refreshContexts()
         this.updatePython()
         this.refreshAutoContext()
 
@@ -114,6 +205,29 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
 
     }
 
+    getSafeContext() {
+        return this.contextItems.map(item => ({
+            ...item,
+            configPaths: item.configPaths ? Array.from(item.configPaths) : []
+        }))
+    }
+
+
+    refreshContexts() {
+        if (!this._view) {
+            return;
+        }
+
+        const safeContextItems = this.getSafeContext()
+
+        
+        this.saveContexts(safeContextItems)
+
+        this._view.webview.postMessage({
+            command: 'updateContexts',
+            data: safeContextItems
+        });
+    }
     updatePaths() {
         if (!this._view) {
             return;
@@ -146,14 +260,14 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
     private _getHtmlForWebview(webview: vscode.Webview): string {
         // Convert local file paths into Webview URIs
         const cssUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.context.extensionUri, 'media', 'webviewParsing', 'styles.css')
+            vscode.Uri.joinPath(this.context.extensionUri, 'media', 'contextViewer', 'index.css')
         );
         let jsUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.context.extensionUri, 'media', 'webviewParsing', 'config.js')
+            vscode.Uri.joinPath(this.context.extensionUri, 'media', 'contextViewer', 'index.js')
         );
 
         // Read HTML template from disk
-        const htmlPath = path.join(this.context.extensionUri.fsPath, 'media', 'webviewParsing', 'index.html');
+        const htmlPath = path.join(this.context.extensionUri.fsPath, 'media', 'contextViewer', 'index.html');
         let htmlContent = fs.readFileSync(htmlPath, 'utf8');
 
         // Replace placeholders with real URIs
@@ -168,7 +282,7 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
             async () => {
                 // Option A: Open native File/Folder picker
                 const fileUris = await vscode.window.showOpenDialog({
-                    canSelectFiles: true,
+                    canSelectFiles: false,
                     canSelectFolders: true,
                     canSelectMany: false,
                     openLabel: 'Select Path'
@@ -180,18 +294,6 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
 
                 const selectedUri = fileUris[0];
 
-                /*
-                // Option B: Prompt for a custom label/name using standard InputBox
-                const label = await vscode.window.showInputBox({
-                    prompt: 'Enter a name/label for this path',
-                    placeHolder: 'e.g., Input Dataset, Script Entry',
-                    value: selectedUri.path.split('/').pop()
-                });
-
-                if (!label) {
-                    return;
-                }
-                    */
 
                 const type = await vscode.window.showQuickPick(
                     [
@@ -272,5 +374,8 @@ export class ParseViewProvider implements vscode.WebviewViewProvider {
 
     async savePaths() {
         this.context.globalState.update('sql-nav-link-' + vscode.workspace.name + 'paths', this.pathObjects);
+    }
+    saveContexts(safeContexts: any) {
+        this.context.globalState.update('sql-nav-link-' + vscode.workspace.name + '-contexts', safeContexts);
     }
 }

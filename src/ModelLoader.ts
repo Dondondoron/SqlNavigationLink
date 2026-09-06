@@ -11,6 +11,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import { spawn } from "child_process";
 import { SqlModelProvider } from "./modelProvider";
+import { SQLMeshContext } from "./parsing/parsingProvider";
 
 
 export class ModelLoader {
@@ -21,7 +22,7 @@ export class ModelLoader {
     ) { }
 
 
-    getPythonParsePromise(pythonPath: string, targetPath: any, type: any): Promise<SqlModelsResponse | undefined> {
+    getPythonParsePromise(pythonPath: string, rootPath: any, type: any, configPaths: string[]): Promise<SqlModelsResponse | undefined> {
 
         const saveCache = vscode.workspace
             .getConfiguration('Dondondoron.sql-nav-link')
@@ -32,7 +33,7 @@ export class ModelLoader {
 
         return new Promise<SqlModelsResponse | undefined>((resolve) => {
             // 1. Create a unique temporary file path
-            const tempFileName = saveCache ? getSafeFileNameForPath(targetPath) : `sql_scanner_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.json`;
+            const tempFileName = saveCache ? getSafeFileNameForPath(rootPath) : `sql_scanner_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.json`;
             const tempFilePath = saveCache ? this.getCacheUri().fsPath : os.tmpdir();
             const fullTarget = path.join(tempFilePath, tempFileName);
 
@@ -52,7 +53,8 @@ export class ModelLoader {
             const osPlatform = os.platform();
 
             logMessage("Starting the parsing of files from python env: " + pythonPath + " with target path: " 
-                + targetPath + " with type: " + type 
+                + rootPath + " with type: " + type 
+                + 'Config Paths: ' + configPaths
                 + " \n With total memory: " + totalMemoryBytes 
                 + " bytes, target memory: " + targetMemoryBytes 
                 + " bytes, CPU cores: " + coreCount 
@@ -78,8 +80,8 @@ export class ModelLoader {
                     scriptPath,
                     tempFilePath,
                     tempFileName,
-                    targetPath,
-                    type
+                    type,
+                    ...configPaths
                 ];
             } else {
                 // Windows / macOS: Fall back to executing Python directly
@@ -88,12 +90,12 @@ export class ModelLoader {
                     scriptPath,
                     tempFilePath,
                     tempFileName,
-                    targetPath,
-                    type
+                    type,
+                    ...configPaths
                 ];
             }
 
-            const pythonProcess = spawn(command, args, { cwd: targetPath });
+            const pythonProcess = spawn(command, args, { cwd: rootPath });
 
             // Capture stdout in runtime
             pythonProcess.stdout.on('data', (data) => {

@@ -24,18 +24,18 @@ if __name__ == '__main__':
 
     out_path = sys.argv[1]
     out_path_file = sys.argv[2]
-    path = sys.argv[3]
-    sql_type = sys.argv[4]
+    sql_type = sys.argv[3]
+    config_paths = sys.argv[4:]
 
     if sql_type == 'SQLMESH':
         from sqlmesh_crawler import run
-        run(path, out_path, out_path_file) 
+        run(config_paths, out_path, out_path_file) 
 
 
     else:
-        crawler = SqlCrawler(path, sql_type)
+        crawler = SqlCrawler(config_paths[0], sql_type)
 
-        raw_folders, config_files = crawler.crawl_folders([path])
+        raw_folders, config_files = crawler.crawl_folders(config_paths)
 
         folders = list(itertools.chain.from_iterable(
             sublist if isinstance(sublist, list) else [sublist] 

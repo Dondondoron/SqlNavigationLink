@@ -20,9 +20,9 @@ from save_data import save_data_json
 from typing import Dict
 import typing as t
 
-def run(path, outdir, filename):
+def run(paths:List[str], outdir:str, filename:str):
 
-    crawler = SqlMeshCrawler(path)
+    crawler = SqlMeshCrawler(paths)
 
     parsed_models = crawler.parse_context()
 
@@ -30,10 +30,8 @@ def run(path, outdir, filename):
 
 class SqlMeshCrawler:
 
-    def __init__(self, path:str):
-        self.path = path
-
-        self.config_paths = self.find_sqlmesh_config_directories(path)
+    def __init__(self, config_paths:List[str]):
+        self.config_paths = config_paths
 
     def parse_context(self):    
             context = Context(paths=self.config_paths, load_state=False)
@@ -86,13 +84,6 @@ class SqlMeshCrawler:
             return parsed_models
 
 
-    def crawl_folders(self, paths: List[str]):
-        sql_files = [self.crawl_folder(path) for path in paths]
-        
-        config_files = self.find_sqlmesh_config_directories(self.path)
-        return [sql_files, config_files]
-          
-    
     def crawl_folder(self, path: str):
         root_path = Path(path)
 

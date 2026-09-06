@@ -7,3 +7,4 @@ __pycache__
 *.vsix
 .venv
 media/lineageViewer/
+media/contextViewer/

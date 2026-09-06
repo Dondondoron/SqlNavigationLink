@@ -5,7 +5,7 @@ import * as vscode from "vscode";
 import { PathObject, SqlType } from "./pathClasses";
 import { SqlModelProvider } from "./modelProvider";
 import { LineagePanelProvider } from "./lineage/lineagePanelProvider";
-import { ParseViewProvider } from "./parsing/parsingProvider";
+import { GenericContext, ParseViewProvider } from "./parsing/parsingProvider";
 import { PythonSupplier } from "./pythonSupplier";
 import { logError } from "./logging";
 import { ModelLoader } from "./ModelLoader";
@@ -27,21 +27,8 @@ export class MainController {
     }
     private async init(context: vscode.ExtensionContext) {
 
-        const savedPaths = context.globalState.get<PathObject[]>('sql-nav-link-' + vscode.workspace.name + 'paths')
 
-        const defaultPaths: PathObject[] = savedPaths ?? (vscode.workspace.workspaceFolders ?? []).map(folder => {
-            folder.uri.fsPath
 
-            const label = folder.uri.fsPath.split('/').pop()
-            return {
-                id: folder.uri.fsPath ?? '',
-                label: label ?? '',
-                filePath: folder.uri.fsPath,
-                type: SqlType.DBT
-            };
-        })
-
-        
         const autoLoadContext = vscode.workspace
             .getConfiguration('Dondondoron.sql-nav-link')
             .get('autoContext', false);
@@ -56,18 +43,18 @@ export class MainController {
 
         this.sqlModelProvider = new SqlModelProvider(context)
         this.modelLoader = new ModelLoader(context, this.sqlModelProvider)
-        this.parseView = new ParseViewProvider(this.pythonSupplier, context, defaultPaths)
+        this.parseView = new ParseViewProvider(this.pythonSupplier, context)
         this.lineagePanelProvider = new LineagePanelProvider(context.extensionUri, this.sqlModelProvider)
         await this.pythonSupplier.init()
 
 
         if (savedCache) {
-            this.modelLoader.loadAllCache(this.parseView.pathObjects.map(p=>p.filePath))
+            this.modelLoader.loadAllCache(this.parseView.pathObjects.map(p => p.filePath))
 
         }
         else if (autoLoadContext) {
             this.parseView.refreshAutoContext()
-        
+
             await Promise.all(this.parseView.pathObjects.map(m => this.parse(m.filePath)))
         }
 
@@ -103,7 +90,7 @@ export class MainController {
                 vscode.window.showErrorMessage('No model name provided to open.');
                 return;
             }
-        
+
             const modelPath = this.sqlModelProvider.modelToPath.get(modelName)
             if (!modelPath) {
                 vscode.window.showErrorMessage('No model with name ' + modelName + ' found');
@@ -147,24 +134,23 @@ export class MainController {
         })
     }
 
-    parseCommand(context: vscode.ExtensionContext) {
+    parseCommand() {
         return vscode.commands.registerCommand(
             'sql-nav-link.parsePaths',
-            async (arg:any) => {
-                this.parse( arg)
+            async (arg: any) => {
+                this.parse(arg)
             }
         )
     }
 
-    private async parse( path:any) {
-        const pathArguments: any[] = [path]
+    private async parse(path: any) {
 
-        const targetPath = this.parseView.pathObjects.find(m => path === m.filePath)
+        const targetContext = this.parseView.contextItems.find(m => path === m.rootPath)
 
         const pythonEnv = this.pythonSupplier.getCurrenPythonEnv()
 
-        if (!targetPath) {
-            logError('Unable to find Path for parsing')
+        if (!targetContext) {
+            logError('Unable to find Context Path for parsing')
             return
         }
         if (!pythonEnv) {
@@ -172,7 +158,11 @@ export class MainController {
             return
         }
 
-        const models = await this.modelLoader.getPythonParsePromise(pythonEnv.pythonExecutable, targetPath.filePath, targetPath.type);
+        const models = await this.modelLoader.getPythonParsePromise(
+            pythonEnv.pythonExecutable,
+            targetContext.rootPath,
+            targetContext.type,
+            targetContext.configPaths ? Array.from(targetContext.configPaths) : [targetContext.rootPath]);
 
         if (models) this.sqlModelProvider.initModels(models);
     }

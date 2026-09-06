@@ -286,5 +286,5 @@ button:hover {
     pointer-events: none;
 }
 .svg path{
-    stroke: var(--vscode-activityBar-activeBorder, rgb(248, 248, 248));
+    stroke: var(--vscode-activityBarBadge-background, rgb(190, 190, 190));
 }

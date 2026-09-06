@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="{{cssUri}}">
+</head>
+
+<body>
+
+    <main class="container">
+
+        <h1>SQL Model Parser</h1>
+
+        <!-- ========================= -->
+        <!-- Paths -->
+        <!-- ========================= -->
+
+        <section class="card">
+
+            <div class="section-header">
+                <h2>Input Paths</h2>
+            </div>
+
+            <div id="pathContainer" class="path-container">
+
+
+            </div>
+
+            <div class="button-row">
+
+                <button data-action="addPath" id="addPathBtn" class="secondary">
+                    + Add Path
+                </button>
+
+                <div id="newContextContainer" class="hidden">
+                    <button id="SQLMESH" data-value="SQLMESH" data-action="requestRootPath"> SQLMESH </button>
+                    <button id="DBT" data-value="DBT" data-action="requestRootPath"> DBT </button>
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- ========================= -->
+        <!-- Python -->
+        <!-- ========================= -->
+
+        <details class="card">
+
+            <summary>
+                Python Environment
+            </summary>
+
+            <div class="details-content">
+
+                <label>Current Environment</label>
+                <div id="current-py-env-div" class="readonly-box">
+                    No environment selected.
+                </div>
+
+                <div id="python-env-content">
+
+                </div>
+
+                
+                <button class="secondary" data-action="selectPythonEnv" id="select-python-env">
+                    Select python env..
+                </button>
+                <button class="secondary" data-action="refreshPythonEnv" id="refresh-python-env">
+                    Refresh
+                </button>
+
+
+            </div>
+
+        </details>
+
+        <!-- ========================= -->
+        <!-- Settings -->
+        <!-- ========================= -->
+
+        <details class="card">
+
+            <summary>
+                Startup Settings
+            </summary>
+
+            <div class="details-content">
+
+                <label class="checkbox-row">
+
+                    <input id="autoParse" type="checkbox" />
+
+                    <span>
+                        Automatically parse on startup
+                    </span>
+
+                </label>
+
+            </div>
+
+        </details>
+
+    </main>
+
+    <script src="{{jsUri}}"></script>
+</body>
+
+</html>
