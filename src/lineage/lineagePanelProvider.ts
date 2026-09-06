@@ -91,18 +91,67 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
 
         this.currentUri = uri
 
-        function getLeafs(column: Column, tables: Map<string, Column[]>) {
 
-            if (column.refs.length > 0) {
-                column.refs.forEach(ref => getLeafs(ref, tables))
-            } else if(column.table){
-                if (tables.has(column.table)) {
-                    tables.get(column.table)?.push(column)
-                }
-                else tables.set(column.table, [column])
-            }
-            return tables
+
+
+        const rightRefs: ModelLineage[] = this.getRightRefs(arrayedModels, model);
+
+
+
+        const centerModel: ModelLineage = {
+            model: model,
+            refs: this.getLeftReferences(arrayedModels, model)
+
         }
+
+
+        const data: LineageInfo = {
+            centerModel: centerModel,
+            rightRefs: rightRefs,
+            size_left: this.currentLeftDepth.toString(),
+            size_right: this.currentRightDepth.toString()
+        }
+
+
+        // Post message to the client side JS inside the webview
+        this._view.webview.postMessage({
+            command: 'renderLineage',
+            data: data
+        });
+    }
+
+    private getRightRefs(arrayedModels: SqlModelInfoTree[], model: SqlModelInfoTree): ModelLineage[] {
+        function loopModelToRefRightSide(currentModel: SqlModelInfo, maxLoops: number, currentDepth: number = 2): ModelLineage[] {
+            // Find all models that depend on currentModel
+            const downstreamModels = arrayedModels.filter(m =>
+                m.table_names?.some(t => t.replaceAll('"', '') === currentModel.name.replaceAll('"', ''))
+            );
+
+            return downstreamModels.map(m => {
+
+                const canGoDeeper = currentDepth < maxLoops;
+
+                return {
+                    model: m,
+                    refs: canGoDeeper ? loopModelToRefRightSide(m, maxLoops, currentDepth + 1) : [],
+                    fields: m.columns.filter(c => c.table !== m.name).map(c => c.name)
+                };
+            });
+        }
+
+        return arrayedModels
+            .filter(m => m.table_names?.some(t => t.replaceAll('"', '') === model.name.replaceAll('"', '')))
+            .map(m => {
+                return {
+                    model: m,
+                    refs: this.currentRightDepth > 1 ? loopModelToRefRightSide(m, this.currentRightDepth) : [],
+                    fields: model.columns.filter(c => c.table !== m.name).map(c => c.name)
+                };
+            });
+    }
+
+    private getLeftReferences(arrayedModels: SqlModelInfoTree[], model: SqlModelInfoTree) {
+
 
         function loopModelToRefLeftSide(model: SqlModelInfoTree, maxLoops: number, currentDepth: number = 2): ModelLineage[] {
             const leafMap: Map<string, Column[]> = new Map();
@@ -138,76 +187,19 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
             getLeafs(m, leafMap);
         });
 
-
-        const leftRefs = Array.from(leafMap)
+        return Array.from(leafMap)
             .map(ti => {
-                const nextModel = arrayedModels.find(m => m.name.replaceAll('"', '') === ti[0].replaceAll('"', '')) ?? ti[0]
+                const nextModel = arrayedModels.find(m => m.name.replaceAll('"', '') === ti[0].replaceAll('"', '')) ?? ti[0];
                 const isSqlModel = nextModel instanceof SqlModelInfoTree;
 
-                model.columns
+                model.columns;
 
                 return {
                     model: isSqlModel ? nextModel : { name: nextModel, file_name: '', file_path: '', table_names: [], columns: ti[1] },
                     refs: nextModel instanceof SqlModelInfoTree && this.currentLeftDepth > 1 ? loopModelToRefLeftSide(nextModel, this.currentLeftDepth) : [],
                     fields: typeof nextModel === 'string' ? [] : nextModel.columns.map(c => c.name)
-                }
-            });
-
-
-
-
-        function loopModelToRefRightSide(currentModel: SqlModelInfo, maxLoops: number, currentDepth: number = 2): ModelLineage[] {
-            // Find all models that depend on currentModel
-            const downstreamModels = arrayedModels.filter(m =>
-                m.table_names?.some(t => t.replaceAll('"', '') === currentModel.name.replaceAll('"', ''))
-            );
-
-            return downstreamModels.map(m => {
-
-                const canGoDeeper = currentDepth < maxLoops;
-
-                return {
-                    model: m,
-                    refs: canGoDeeper ? loopModelToRefRightSide(m, maxLoops, currentDepth + 1) : [],
-                    fields: m.columns.filter(c=> c.table !== m.name).map(c=>c.name)
                 };
             });
-        }
-
-        // Right refs invocation (Downstream dependents)
-        const rightRefs : ModelLineage[] = arrayedModels
-            .filter(m => m.table_names?.some(t => t.replaceAll('"', '') === model.name.replaceAll('"', '')))
-            .map(m => {
-                return {
-                    model: m,
-                    refs: this.currentRightDepth > 1 ? loopModelToRefRightSide(m, this.currentRightDepth) : [],
-                    fields: model.columns.filter(c=> c.table !== m.name).map(c=>c.name)
-                        };
-            });
-
-
-
-
-        const centerModel: ModelLineage = {
-            model: model,
-            refs: leftRefs
-
-        }
-
-
-        const data: LineageInfo = {
-            centerModel: centerModel,
-            rightRefs: rightRefs,
-            size_left: this.currentLeftDepth.toString(),
-            size_right: this.currentRightDepth.toString()
-        }
-
-
-        // Post message to the client side JS inside the webview
-        this._view.webview.postMessage({
-            command: 'renderLineage',
-            data: data
-        });
     }
 
     private _getHtmlForWebview(webview: vscode.Webview): string {
@@ -228,4 +220,17 @@ export class LineagePanelProvider implements vscode.WebviewViewProvider {
             .replace('{{cssUri}}', cssUri.toString())
             .replace('{{jsUri}}', jsUri.toString());
     }
+}
+
+function getLeafs(column: Column, tables: Map<string, Column[]>) {
+
+    if (column.refs.length > 0) {
+        column.refs.forEach(ref => getLeafs(ref, tables))
+    } else if (column.table) {
+        if (tables.has(column.table)) {
+            tables.get(column.table)?.push(column)
+        }
+        else tables.set(column.table, [column])
+    }
+    return tables
 }
