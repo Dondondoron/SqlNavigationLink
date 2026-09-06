@@ -1,10 +1,10 @@
 
 from __future__ import annotations
 from pathlib import Path
-from typing import List, Dict, Union, Set, Iterable, Optional
+from typing import List, Optional, Dict, Any, Union, Set, Iterable
 from sqlglot.errors import ParseError
 from sqlglot import exp
-from classes import SqlModelInfo, ColRef, Ref, RawModel, TableReference
+from classes import SqlModelInfo, TableInfo, ColRef, Ref, RawModel
 import json
 import logging
 from graphlib import TopologicalSorter
@@ -19,12 +19,10 @@ def sort(raw_models: List[RawModel]):
     # Build a lookup dictionary: table_name -> set of models that reference it
     referenced_by = {}
     for m in raw_models:
-        for table_ref in m.tables:
-            # Use the logical table name as the key when tracking dependencies
-            table_key = table_ref.table_name if isinstance(table_ref, TableReference) else str(table_ref)
-            if table_key not in referenced_by:
-                referenced_by[table_key] = set()
-            referenced_by[table_key].add(m.name)
+        for table_name in m.tables:
+            if table_name not in referenced_by:
+                referenced_by[table_name] = set()
+            referenced_by[table_name].add(m.name)
 
     # 3. BUILD THE GRAPH (Independent models first)
     dependencies = {}
@@ -79,12 +77,11 @@ def parse_sql_models_and_extract_tables(models):
         if sql_statement is None:
             continue
 
-        tables = set((TableReference(table_name=table.name, schema_name=table.db, catalog_name=table.catalog) for table in sql_statement.find_all(exp.Table)))
+        tables = set(('.'.join([n for n in [table.db, table.catalog, table.name] if n != '']) for table in sql_statement.find_all(exp.Table)))
         filename = Path(model_key).name
 
         if isinstance(sql_statement, exp.Select):
-            model_table_ref = TableReference(table_name=model_name, schema_name='', catalog_name='')
-            raw_schema[model_name] = [ColRef(name=sel, table=model_table_ref) for sel in sql_statement.named_selects]
+            raw_schema[model_name] = [ColRef(name=sel, table=model_name) for sel in sql_statement.named_selects]
         raw_models.append(RawModel(model_name, model_key, filename, sql_statement, tables))
 
 
@@ -110,8 +107,7 @@ def parse_sql_models_and_extract_tables(models):
             if model.name in raw_schema:
                 schematic = raw_schema[model.name]
                 if len(schematic) == 1:
-                    model_table_ref = TableReference(table_name=model.name, schema_name='', catalog_name='')
-                    raw_schema[model.name] = [ColRef(name=col.name, table=model_table_ref) for col in sql_model.columns]
+                    raw_schema[model.name] = [ColRef(name=col.name, table=model.name) for col in sql_model.columns]
             
         except ParseError as e:
             logging.error(f"Error parsing SQL for model {model.path}: {e}")
@@ -122,13 +118,10 @@ def parse_sql_models_and_extract_tables(models):
 
 class ModelParser:
 
-    def __init__(self, model: 'RawModel', raw_schema: Dict[str, List['ColRef']], catalog:str = '', schema:str = '', table_name:Optional[str] = None):
+    def __init__(self, model: 'RawModel', raw_schema: Dict[str, List['ColRef']]):
         self.model = model
         self.raw_schema = raw_schema
         self.unmatched_columns = set()
-        self.catalog = catalog
-        self.schema = schema
-        self.table_name = table_name if table_name else model.name
 
     def parse(self):
         model = self.model
@@ -159,7 +152,7 @@ class ModelParser:
         truncated_columns = self.truncateColumns(columns, model.name)
 
         table_names = {
-            TableReference(table_name=table.name, schema_name=table.db, catalog_name=table.catalog) 
+            '.'.join([n for n in [table.db, table.catalog, table.name] if n != '']) 
             for table in query.find_all(exp.Table) 
             if table.alias_or_name not in cte_names 
             and table.name not in cte_names 
@@ -170,9 +163,6 @@ class ModelParser:
             logging.warning(f'Found unresolved Star (*) in model {model.name}')
         return [SqlModelInfo(
             name=model.name,
-            table_name=self.table_name,
-            table_schema=self.schema,
-            catalog=self.catalog,
             file_name=model.file_name, 
             file_path=model.path,
             columns=columns,
@@ -193,44 +183,35 @@ class ModelParser:
     def truncateColumns(self, columns: List['ColRef'], model_name):
         truncated_columns = []
 
-        model_table_ref = TableReference(table_name=model_name, schema_name='', catalog_name='')
         for column in columns:
             inner_truncated = set()
             inner_cols = self.traverse(column, inner_truncated)
-            truncated_columns.append(ColRef(name=column.name, table=model_table_ref, refs=tuple(inner_cols)))
+            truncated_columns.append(ColRef(name=column.name, table=model_name, refs=tuple(inner_cols)))
 
         return truncated_columns
 
-    def parseColumn(self, column: exp.Column, table_map: Dict[str, TableReference], all_table_map: Dict[str, List['ColRef']]):
+    def parseColumn(self, column: exp.Column, table_map: Dict[str, str], all_table_map: Dict[str, List['ColRef']]):
         if column.name == '*':
             return self.expand_single_wildcard(column.table, table_map, all_table_map)
-
-        # table_name is the string identifier (alias or full name) used in maps
-        table_name: str = ""
 
         if not column.table and len(table_map) > 1:
             table_name = self.resolve_unqualified_column(column.name, table_map.values(), all_table_map)
         else:
-            if len(table_map) == 1:
-                # When there is only one table, use its alias/key
-                table_name = next(iter(table_map.keys()))
-            else:
-                table_name = self.get_table_from_column(column, table_map, all_table_map)
+            table_name = next(iter(table_map.values())) if len(table_map) == 1 else self.get_table_from_column(column, table_map, all_table_map)
 
         if table_name == '':
             # 1. Filter and get only the schemas that exist in your map
             valid_schemas = [
-                self.raw_schema[table_ref.get_full_name()]
-                for table_ref in table_map.values()
-                if table_ref.get_full_name() in self.raw_schema
+                self.raw_schema[table]
+                for table in table_map.values()
+                if table in self.raw_schema
             ]
 
             # 2. Search for the matching column name
             for schema_table in valid_schemas:
                 for stc in schema_table:
                     if stc.name == column.name:
-                        # stc.table is a TableReference
-                        table_name = stc.table.get_full_name()
+                        table_name = stc.table
                         break  # Stop searching this table once found
                     
         
@@ -239,26 +220,18 @@ class ModelParser:
         # FIX: Use case-insensitive matching (.lower()) to prevent keyword/casing mismatches
         col_name_lower = column.name.lower()
 
-        # Derive a TableReference for this column
-        table_ref: Optional[TableReference] = None
-        if table_name in table_map:
-            table_ref = table_map[table_name]
-        elif table_name and table_name in self.raw_schema and len(self.raw_schema[table_name]) > 0:
-            first_col = self.raw_schema[table_name][0]
-            if isinstance(first_col.table, TableReference):
-                table_ref = first_col.table
-        if table_ref is None:
-            table_ref = TableReference(table_name=table_name, schema_name='', catalog_name='')
-
         if table_name in all_table_map:
             matched_refs = [c for c in all_table_map[table_name] if c.name.lower() == col_name_lower]
-            return [ColRef(name=column.alias_or_name, table=table_ref, refs=tuple(matched_refs))]
+            return [ColRef(name=column.alias_or_name, table=table_name, refs=tuple(matched_refs))]
 
         elif table_name in self.raw_schema:
             matched_refs = [c for c in self.raw_schema[table_name] if c.name.lower() == col_name_lower]
-            return [ColRef(name=column.alias_or_name, table=table_ref, refs=tuple(matched_refs))]
+            return [ColRef(name=column.alias_or_name, table=table_name, refs=tuple(matched_refs))]
         
-        return [ColRef(name=column.alias_or_name, table=table_ref)]
+        #if '.' not in table_name and table_name != '':
+        #            print('')
+
+        return [ColRef(name=column.alias_or_name, table=table_name)]
 
     def parseSelect(self, name:str, query: Union[exp.Query, exp.CTE, exp.Subquery], all_table_map: Dict[str, List['ColRef']]):
         # Unwrap CTEs or Subqueries to inspect the actual inner query
@@ -280,14 +253,14 @@ class ModelParser:
                     refs.append(right_lineage[i])
 
                 combined_columns.append(
-                    ColRef(name=l_col.name, table=TableReference(table_name=query.alias_or_name or "UNION", schema_name='', catalog_name=''), refs=tuple(refs))
+                    ColRef(name=l_col.name, table=query.alias_or_name or "UNION", refs=tuple(refs))
                 )
             return combined_columns
 
         # Standard SELECT processing
         tables = list(query.find_all(exp.Table, bfs=False))
         table_map = {
-            table.alias_or_name: TableReference(table_name=table.name, schema_name=table.db, catalog_name=table.catalog)
+            table.alias_or_name: '.'.join([n for n in [table.db, table.catalog, table.name] if n != ''])
             for table in tables
         }
         #all_columns: List['ColRef'] = []
@@ -307,7 +280,7 @@ class ModelParser:
                 continue
             else:
                 looped = self.loop_column_lineage(expr, table_map, all_table_map)
-                all_lineages.append(ColRef(name=expr.alias_or_name, table=TableReference(table_name=name, schema_name='', catalog_name=''), refs=tuple(looped)))
+                all_lineages.append(ColRef(name=expr.alias_or_name, table=name, refs=tuple(looped)))
                 #for column in expr.find_all(exp.Column):
                 #    
                 #    columns.extend(self.parseColumn(column, table_map, all_table_map))
@@ -357,24 +330,14 @@ class ModelParser:
             return list(chain.from_iterable(self.loop_column_lineage(i, table_map, all_table_map) for i in expr))
         return []
 
-    def expand_single_wildcard(self, table_name: str, table_map: Dict[str, TableReference], table_column_map: Dict[str, List['ColRef']]):
-        """
-        Expand a single-table wildcard (e.g. t.*).
+    def expand_single_wildcard(self, table_name: str, table_map: dict, table_column_map: Dict[str, List['ColRef']]):
+        table_name = table_map.get(table_name, table_name)
 
-        table_name is the alias or table identifier used in the query.
-        table_map maps aliases/identifiers to TableReference instances.
-        """
-        alias = table_name
-        table_ref = table_map.get(alias)
-        full_name = table_ref.get_full_name() if table_ref else alias
+        if table_name in table_column_map:
+            return list(table_column_map[table_name])
 
-        # Prefer lineage from CTE/subquery map using alias
-        if alias in table_column_map:
-            return list(table_column_map[alias])
-
-        # Fallback to raw schema using fully qualified name
-        if full_name in self.raw_schema:
-            return [ColRef(name=col.name, table=col.table) for col in self.raw_schema[full_name]]
+        if table_name in self.raw_schema:
+            return [ColRef(name=col.name, table=table_name) for col in self.raw_schema[table_name]]
 
         return []
 
@@ -382,32 +345,28 @@ class ModelParser:
     def expand_full_wildcard(self, expr: exp.Star, query_tables: List[exp.Table], table_column_map: Dict[str, List['ColRef']]):
         cols: List['ColRef'] = []
         for table in query_tables:
-            table_ref = TableReference(table_name=table.name, schema_name=table.db, catalog_name=table.catalog)
-            cols.extend(self.expand_single_wildcard(table.name, {table.name: table_ref}, table_column_map))
+            cols.extend(self.expand_single_wildcard(table.name, {table.name: table.name}, table_column_map))
         return cols
 
 
-    def get_table_from_column(self, column: exp.Column, table_map: Dict[str, TableReference], all_table_map: Dict[str, List['ColRef']])-> str:
+    def get_table_from_column(self, column: exp.Column, table_map: dict, all_table_map: Dict[str, List['ColRef']]):
         table_name = column.table
 
         if table_name in table_map:
-            return table_name
-        elif table_name in all_table_map:
-            return table_name
-        elif table_name in self.raw_schema:
+            return table_map[table_name]
+        elif table_name in all_table_map or table_name in self.raw_schema:
             return table_name
 
         self.unmatched_columns.add(column.sql())
-        return table_name or ""
+        return table_name
 
 
 
 
-    def resolve_unqualified_column(self, column_name: str, candidate_tables: Iterable[TableReference], all_table_map: Dict[str, List['ColRef']]) -> str:
+    def resolve_unqualified_column(self, column_name: str, candidate_tables: Iterable[str], all_table_map: Dict[str, List['ColRef']]) -> str:
         col_name_lower = column_name.lower()
 
-        for table_ref in candidate_tables:
-            table_name = table_ref.get_full_name()
+        for table_name in candidate_tables:
             if table_name in all_table_map:
                 # FIX: Case-insensitive match
                 if any(col.name.lower() == col_name_lower for col in all_table_map[table_name]):

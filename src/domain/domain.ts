@@ -1,26 +1,15 @@
-
-export interface TableReference{
-    table_name:string
-    schema_name:string
-    catalog_name:string
-
-}
-
 export interface Column {
     name:string
-    table?:TableReference
+    table?:string
     refs:Column[]
 }
 
 export interface SqlModelInfo{
-    name: string
-    table_name: string
-    table_schema: string
-    catalog: string
-    file_name: string
-    file_path: string
-    table_names: string[]
-    columns: Column[]
+         name: string
+         file_name: string
+         file_path: string
+         table_names: string[]
+         columns: Column[]
 }
 
 export interface ModelLineage {

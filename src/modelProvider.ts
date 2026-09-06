@@ -12,9 +12,6 @@ import { Column, SqlModelInfo } from "./domain/domain";
 export class SqlModelInfoTree extends vscode.TreeItem implements SqlModelInfo {
     constructor(
         public name: string,
-        public table_name: string,
-        public table_schema: string,
-        public catalog: string,
         public file_name: string,
         public file_path: string,
         public table_names: string[],
@@ -79,9 +76,6 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
                 vscode.Uri.file(m[1].file_path).fsPath,
                 new SqlModelInfoTree(
                     m[1].name,
-                    m[1].table_name,
-                    m[1].table_schema,
-                    m[1].catalog,
                     m[1].file_name,
                     m[1].file_path,
                     m[1].table_names,
@@ -179,7 +173,7 @@ export class SqlModelProvider implements vscode.TreeDataProvider<vscode.TreeItem
                     }
 
                     // 3. Read the output directly from the file
-                    fs.readFile(fullTarget, 'utf-8', (readErr:any, rawData:any) => {
+                    fs.readFile(fullTarget, 'utf-8', (readErr, rawData) => {
                         if (!saveCache) cleanup();
 
                         if (readErr) {
