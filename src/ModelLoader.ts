@@ -41,11 +41,30 @@ export class ModelLoader {
                 fs.unlink(tempFilePath, () => { }); // Silent cleanup attempt
             };
 
-            const pythonProcess = spawn(
+            // Get total system memory in bytes and calculate 80%
+            const totalMemoryBytes = os.totalmem();
+            const targetMemoryBytes = Math.floor(totalMemoryBytes * 0.8);
+            const targetMemoryMb = Math.floor(targetMemoryBytes / (1024 * 1024));
+
+            // 2. Calculate CPU Quota (80% of total aggregate core power)
+            const coreCount = os.cpus().length;
+            // Each core represents 100% capacity in systemd-run. 
+            // Multiplying core count by 80 gives exactly 80% of total system CPU capacity.
+            const cpuQuotaPercentage = coreCount * 80;
+
+            const pythonProcess = spawn('systemd-run', [
+                '--user',
+                '--scope',
+                '-p', `MemoryMax=${targetMemoryMb}M`,
+                '-p', `CPUQuota=${cpuQuotaPercentage}%`,
+                '-p', 'MemorySwapMax=0',
                 pythonPath,
-                [scriptPath, tempFilePath, tempFileName, targetPath, type],
-                { cwd: targetPath }
-            );
+                scriptPath,
+                tempFilePath,
+                tempFileName,
+                targetPath,
+                type
+            ], { cwd: targetPath });
 
             // Capture stdout in runtime
             pythonProcess.stdout.on('data', (data) => {
