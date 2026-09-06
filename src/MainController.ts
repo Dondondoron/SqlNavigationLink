@@ -8,6 +8,7 @@ import { LineagePanelProvider } from "./lineage/lineagePanelProvider";
 import { ParseViewProvider } from "./parsing/parsingProvider";
 import { PythonSupplier } from "./pythonSupplier";
 import { logError } from "./logging";
+import { ModelLoader } from "./ModelLoader";
 
 
 export class MainController {
@@ -17,6 +18,7 @@ export class MainController {
     parseView!: ParseViewProvider
     lineagePanelProvider!: LineagePanelProvider
 
+    modelLoader!: ModelLoader
     pythonSupplier!: PythonSupplier
 
 
@@ -53,19 +55,20 @@ export class MainController {
         this.pythonSupplier = new PythonSupplier(context)
 
         this.sqlModelProvider = new SqlModelProvider(context)
+        this.modelLoader = new ModelLoader(context, this.sqlModelProvider)
         this.parseView = new ParseViewProvider(this.pythonSupplier, context, defaultPaths)
         this.lineagePanelProvider = new LineagePanelProvider(context.extensionUri, this.sqlModelProvider)
         await this.pythonSupplier.init()
 
 
         if (savedCache) {
-            this.sqlModelProvider.loadAllCache(this.parseView.pathObjects.map(p=>p.filePath))
+            this.modelLoader.loadAllCache(this.parseView.pathObjects.map(p=>p.filePath))
 
         }
         else if (autoLoadContext) {
             this.parseView.refreshAutoContext()
         
-            await Promise.all(this.parseView.pathObjects.map(m => this.parse(context, m.filePath)))
+            await Promise.all(this.parseView.pathObjects.map(m => this.parse(m.filePath)))
         }
 
         this.lineagePanelProvider.init()
@@ -148,12 +151,12 @@ export class MainController {
         return vscode.commands.registerCommand(
             'sql-nav-link.parsePaths',
             async (arg:any) => {
-                this.parse(context, arg)
+                this.parse( arg)
             }
         )
     }
 
-    private async parse(context: vscode.ExtensionContext, path:any) {
+    private async parse( path:any) {
         const pathArguments: any[] = [path]
 
         const targetPath = this.parseView.pathObjects.find(m => path === m.filePath)
@@ -169,7 +172,7 @@ export class MainController {
             return
         }
 
-        const models = await this.sqlModelProvider.getPythonParsePromise(pythonEnv.pythonExecutable, targetPath.filePath, targetPath.type);
+        const models = await this.modelLoader.getPythonParsePromise(pythonEnv.pythonExecutable, targetPath.filePath, targetPath.type);
 
         if (models) this.sqlModelProvider.initModels(models);
     }

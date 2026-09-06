@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as childProcess from 'child_process';
 import { promisify } from 'util';
-import { logError, logInformation } from "./logging";
+import { logError, logInformation, logMessage } from "./logging";
 import { Config } from "./Settings";
 
 const exec = promisify(childProcess.exec);
@@ -234,7 +234,7 @@ export class PythonSupplier {
     }
 
     async refreshPython() {
-        logInformation('Getting available python packages')
+        logMessage('Getting available python packages')
 
         await Promise.all([...this.pythonVenvs.map(e => e.getPackages())])
 
