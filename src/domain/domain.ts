@@ -1,3 +1,5 @@
+export type SqlModelsResponse = Record<string, any>;
+
 export interface Column {
     name:string
     table?:string
