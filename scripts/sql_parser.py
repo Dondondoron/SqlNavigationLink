@@ -77,7 +77,7 @@ def parse_sql_models_and_extract_tables(models):
         if sql_statement is None:
             continue
 
-        tables = set(('.'.join([n for n in [table.db, table.catalog, table.name] if n != '']) for table in sql_statement.find_all(exp.Table)))
+        tables = set(('.'.join([n for n in [table.catalog, table.db, table.name] if n != '']) for table in sql_statement.find_all(exp.Table)))
         filename = Path(model_key).name
 
         if isinstance(sql_statement, exp.Select):
@@ -152,7 +152,7 @@ class ModelParser:
         truncated_columns = self.truncateColumns(columns, model.name)
 
         table_names = {
-            '.'.join([n for n in [table.db, table.catalog, table.name] if n != '']) 
+            '.'.join([n for n in [table.catalog, table.db, table.name] if n != '']) 
             for table in query.find_all(exp.Table) 
             if table.alias_or_name not in cte_names 
             and table.name not in cte_names 
@@ -260,7 +260,7 @@ class ModelParser:
         # Standard SELECT processing
         tables = list(query.find_all(exp.Table, bfs=False))
         table_map = {
-            table.alias_or_name: '.'.join([n for n in [table.db, table.catalog, table.name] if n != ''])
+            table.alias_or_name: '.'.join([n for n in [table.catalog, table.db, table.name] if n != ''])
             for table in tables
         }
         #all_columns: List['ColRef'] = []
